@@ -1,0 +1,67 @@
+{
+  "states": [
+    {
+      "name": "stop",
+      "x": -18.0,
+      "y": -22.0,
+      "is_initial": false,
+      "is_final": true
+    },
+    {
+      "name": "st2",
+      "x": -102.0,
+      "y": -214.0,
+      "is_initial": false,
+      "is_final": false
+    },
+    {
+      "name": "st1",
+      "x": -31.0,
+      "y": -97.0,
+      "is_initial": false,
+      "is_final": false
+    },
+    {
+      "name": "start",
+      "x": -21.0,
+      "y": 8.0,
+      "is_initial": true,
+      "is_final": false
+    }
+  ],
+  "transitions": [
+    {
+      "source": "st2",
+      "target": "stop",
+      "label": "stop"
+    },
+    {
+      "source": "st1",
+      "target": "st2",
+      "label": "rt2"
+    },
+    {
+      "source": "start",
+      "target": "st1",
+      "label": "rt"
+    }
+  ],
+  "actions": [
+    {
+      "name": "trun2",
+      "x": -18.0,
+      "y": -12.0
+    },
+    {
+      "name": "turn",
+      "x": -12.0,
+      "y": -9.0
+    },
+    {
+      "name": "nothing",
+      "x": -56.0,
+      "y": -14.0
+    }
+  ],
+  "simulink_blocks": []
+}
