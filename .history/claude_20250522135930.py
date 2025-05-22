@@ -13,24 +13,24 @@ from PyQt5.QtWidgets import (
     QSpinBox, QComboBox, QGraphicsRectItem, QGraphicsPathItem, QDialogButtonBox,
     QFileDialog, QProgressBar, QTabWidget, QCheckBox, QActionGroup, QGraphicsItem,
     QGroupBox, QUndoStack, QUndoCommand, QStyle, QSizePolicy, QGraphicsLineItem,
-    QToolButton, QGraphicsSceneMouseEvent, QGraphicsSceneDragDropEvent, 
-    QGraphicsSceneHoverEvent # CORRECTED: Added import
+    QToolButton, QGraphicsSceneHoverEvent, QGraphicsSceneMouseEvent, # Added QGraphicsSceneHoverEvent & QGraphicsSceneMouseEvent
+    QGraphicsSceneDragDropEvent # Added QGraphicsSceneDragDropEvent
 )
 from PyQt5.QtGui import (
     QIcon, QBrush, QColor, QFont, QPen, QPixmap, QDrag, QPainter, QPainterPath,
-    QTransform, QKeyEvent, QPainterPathStroker, QPolygonF, QKeySequence, 
-    QDesktopServices, QWheelEvent, QMouseEvent, QCloseEvent, QFontMetrics # Added QFontMetrics
+    QTransform, QKeyEvent, QPainterPathStroker, QPolygonF, QKeySequence, # Added QKeySequence
+    QDesktopServices # Added for opening directory
 )
 from PyQt5.QtCore import (
     Qt, QRectF, QPointF, QMimeData, QPoint, QLineF, QObject, pyqtSignal, QThread, QDir,
-    QEvent, QTimer, QSize, QTime, QUrl, 
-    QSaveFile, QIODevice 
+    QEvent, QTimer, QSize, QTime, QUrl, # Added QTime, QUrl
+    QSaveFile # Added for safer file saving
 )
 import math
 
 
 # --- Configuration ---
-APP_VERSION = "1.3.2" # Incremented for fixes
+APP_VERSION = "1.3" # Incremented for fixes
 APP_NAME = "Brain State Machine Designer"
 FILE_EXTENSION = ".bsm"
 FILE_FILTER = f"Brain State Machine Files (*{FILE_EXTENSION});;All Files (*)"
@@ -65,7 +65,6 @@ def get_standard_icon(standard_pixmap_enum_value, fallback_text=None):
     return icon
 
 # --- MATLAB Connection Handling ---
-# (This class remains unchanged from the previous correct version)
 class MatlabConnection(QObject):
     connectionStatusChanged = pyqtSignal(bool, str)
     simulationFinished = pyqtSignal(bool, str, str)
@@ -78,39 +77,40 @@ class MatlabConnection(QObject):
         self._active_threads = []
 
     def set_matlab_path(self, path):
-        self.matlab_path = path.strip() 
+        self.matlab_path = path.strip() # Ensure no leading/trailing whitespace
         if self.matlab_path and os.path.exists(self.matlab_path) and \
            (os.access(self.matlab_path, os.X_OK) or self.matlab_path.lower().endswith('.exe')):
-            self.connected = True 
+            self.connected = True # Assume connected until test fails
             self.connectionStatusChanged.emit(True, f"MATLAB path set and appears valid: {self.matlab_path}")
             return True
         else:
             old_path = self.matlab_path
             self.connected = False
-            self.matlab_path = "" 
-            if old_path: 
+            self.matlab_path = "" # Clear invalid path
+            if old_path: # Only emit error if a path was actually provided and failed
                 self.connectionStatusChanged.emit(False, f"MATLAB path '{old_path}' is invalid or not executable.")
-            else: 
+            else: # Path was empty
                 self.connectionStatusChanged.emit(False, "MATLAB path cleared.")
             return False
 
     def test_connection(self):
-        if not self.matlab_path: 
+        if not self.matlab_path: # Path must be set
             self.connected = False
             self.connectionStatusChanged.emit(False, "MATLAB path not set. Cannot test connection.")
             return False
-        if not self.connected and self.matlab_path : 
-             if not self.set_matlab_path(self.matlab_path): 
-                  return False 
+        if not self.connected and self.matlab_path : # Path is set but status is disconnected (e.g. from previous failure)
+             if not self.set_matlab_path(self.matlab_path): # Re-validate path first
+                  return False # set_matlab_path already emitted error
 
         try:
+            # Use -nodisplay for faster startup and no GUI elements
             cmd = [self.matlab_path, "-nodisplay", "-batch", "disp('MATLAB_CONNECTION_TEST_SUCCESS')"]
             process = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=20, check=True, 
+                cmd, capture_output=True, text=True, timeout=20, check=True, # Increased timeout slightly
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
             if "MATLAB_CONNECTION_TEST_SUCCESS" in process.stdout:
-                self.connected = True 
+                self.connected = True # Explicitly set on success
                 self.connectionStatusChanged.emit(True, "MATLAB connection test successful.")
                 return True
             else:
@@ -137,6 +137,7 @@ class MatlabConnection(QObject):
 
     def detect_matlab(self):
         paths_to_check = []
+        # Windows
         if sys.platform == 'win32':
             program_files = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
             matlab_base = os.path.join(program_files, 'MATLAB')
@@ -144,11 +145,14 @@ class MatlabConnection(QObject):
                 versions = sorted([d for d in os.listdir(matlab_base) if d.startswith('R20')], reverse=True)
                 for v_year_letter in versions:
                     paths_to_check.append(os.path.join(matlab_base, v_year_letter, 'bin', 'matlab.exe'))
+        # macOS
         elif sys.platform == 'darwin':
             base_app_path = '/Applications'
+            # List all MATLAB*.app directories and sort them by typical versioning
             potential_matlab_apps = sorted([d for d in os.listdir(base_app_path) if d.startswith('MATLAB_R20') and d.endswith('.app')], reverse=True)
             for app_name in potential_matlab_apps:
                  paths_to_check.append(os.path.join(base_app_path, app_name, 'bin', 'matlab'))
+        # Linux
         else:
             common_base_paths = ['/usr/local/MATLAB', '/opt/MATLAB']
             for base_path in common_base_paths:
@@ -156,19 +160,26 @@ class MatlabConnection(QObject):
                     versions = sorted([d for d in os.listdir(base_path) if d.startswith('R20')], reverse=True)
                     for v_year_letter in versions:
                          paths_to_check.append(os.path.join(base_path, v_year_letter, 'bin', 'matlab'))
-            paths_to_check.append('matlab') 
+            paths_to_check.append('matlab') # Check if 'matlab' is in PATH
 
         for path_candidate in paths_to_check:
-            if path_candidate == 'matlab' and sys.platform != 'win32': 
+            # For 'matlab' from PATH, check if it resolves
+            if path_candidate == 'matlab' and sys.platform != 'win32': # `where matlab` or `which matlab`
                 try:
+                    # Check if 'matlab' is callable from PATH
                     test_process = subprocess.run([path_candidate, "-batch", "exit"], timeout=5, capture_output=True)
                     if test_process.returncode == 0:
+                        # Found in PATH, now try to get full path if possible
+                        # This part is tricky and OS-dependent for getting full path from command
+                        # For now, accept 'matlab' as is, assuming it works
                         if self.set_matlab_path(path_candidate):
+                           # self.test_connection() # Optionally test immediately
                            return True
                 except (FileNotFoundError, subprocess.TimeoutExpired):
-                    continue 
+                    continue # Not found in PATH or timed out
             elif os.path.exists(path_candidate):
                 if self.set_matlab_path(path_candidate):
+                    # self.test_connection() # Optionally test immediately
                     return True
         
         self.connectionStatusChanged.emit(False, "MATLAB auto-detection failed. Please set the path manually.")
@@ -208,18 +219,18 @@ class MatlabConnection(QObject):
             return False
 
         slx_file_path = os.path.join(output_dir, f"{model_name}.slx").replace('\\', '/')
-        model_name_orig = model_name 
+        model_name_orig = model_name # Keep original for user messages
 
         script_lines = [
             f"% Auto-generated Simulink model script for '{model_name_orig}'",
             f"disp('Starting Simulink model generation for {model_name_orig}...');",
-            f"modelNameVar = '{model_name_orig}';", 
+            f"modelNameVar = '{model_name_orig}';", # Name for the .slx file and system
             f"outputModelPath = '{slx_file_path}';",
             "try",
             "    if bdIsLoaded(modelNameVar), close_system(modelNameVar, 0); end",
             "    if exist(outputModelPath, 'file'), delete(outputModelPath); end", 
             
-            "    hModel = new_system(modelNameVar);", 
+            "    hModel = new_system(modelNameVar);", # Create the Simulink model
             "    open_system(hModel);",
             
             "    disp('Adding Stateflow chart...');",
@@ -229,9 +240,9 @@ class MatlabConnection(QObject):
             "    end",
 
             "    chartSFObj = Stateflow.Chart(machine);", 
-            "    chartSFObj.Name = 'BrainStateMachineLogic';", 
+            "    chartSFObj.Name = 'BrainStateMachineLogic'; % Internal Stateflow chart name",
             
-            "    chartBlockSimulinkPath = [modelNameVar, '/', 'BSM_Chart'];", 
+            "    chartBlockSimulinkPath = [modelNameVar, '/', 'BSM_Chart'];", # Path for Simulink block
             "    add_block('stateflow/Chart', chartBlockSimulinkPath, 'Chart', chartSFObj.Path);",
             "    disp(['Stateflow chart block added at: ', chartBlockSimulinkPath]);",
 
@@ -248,7 +259,7 @@ class MatlabConnection(QObject):
             script_lines.extend([
                 f"{s_id_matlab_safe} = Stateflow.State(chartSFObj);",
                 f"{s_id_matlab_safe}.Name = '{s_name_matlab}';",
-                f"{s_id_matlab_safe}.Position = [{state['x']/3}, {state['y']/3}, {state['width']/3}, {state['height']/3}];", 
+                f"{s_id_matlab_safe}.Position = [{state['x']/3}, {state['y']/3}, {state['width']/3}, {state['height']/3}];", # Adjusted scaling
                 f"stateHandles('{s_name_matlab}') = {s_id_matlab_safe};"
             ])
             if state.get('is_initial', False):
@@ -278,7 +289,7 @@ class MatlabConnection(QObject):
         script_lines.extend([
             "% --- Finalize and Save ---",
             "    disp(['Attempting to save Simulink model to: ', outputModelPath]);",
-            "    save_system(modelNameVar, outputModelPath, 'OverwriteIfChangedOnDisk', true);", 
+            "    save_system(modelNameVar, outputModelPath, 'OverwriteIfChangedOnDisk', true);", # Ensure save
             "    close_system(modelNameVar, 0);",
             "    disp(['Simulink model saved successfully to: ', outputModelPath]);",
             "    fprintf('MATLAB_SCRIPT_SUCCESS:%s\\n', outputModelPath);", 
@@ -314,13 +325,14 @@ class MatlabConnection(QObject):
         currentSimTime = {sim_time};
         
         try
-            prevPath = path; 
+            prevPath = path; % Store current path
             addpath(modelDir);
             disp(['Added to MATLAB path: ', modelDir]);
 
             load_system(modelPath);
             disp(['Simulating model: ', modelName, ' for ', num2str(currentSimTime), ' seconds.']);
             
+            % Run simulation. Use set_param for sim options if needed before sim command.
             simOut = sim(modelName, 'StopTime', num2str(currentSimTime));
             
             disp('Simulink simulation completed successfully.');
@@ -331,7 +343,7 @@ class MatlabConnection(QObject):
             fprintf('MATLAB_SCRIPT_FAILURE:%s\\n', strrep(getReport(e, 'basic'),'\\n',' '));
         end
         if bdIsLoaded(modelName), close_system(modelName, 0); end
-        path(prevPath); 
+        path(prevPath); % Restore original path
         disp(['Restored MATLAB path. Removed: ', modelDir]);
         """
         self._run_matlab_script(script_content, self.simulationFinished, "Simulation")
@@ -426,6 +438,7 @@ class MatlabCommandWorker(QObject):
         message = ""
         try:
             matlab_run_command = f"run('{self.script_file.replace('\\', '/')}')"
+            # Use -nodisplay for background execution without MATLAB desktop
             cmd = [self.matlab_path, "-nodisplay", "-batch", matlab_run_command]
             
             timeout_seconds = 600 
@@ -490,6 +503,7 @@ class MatlabCommandWorker(QObject):
                 try:
                     os.remove(self.script_file)
                     script_dir = os.path.dirname(self.script_file)
+                    # Try to remove dir only if it's indeed empty and belongs to our temp files
                     if script_dir.startswith(tempfile.gettempdir()) and "bsm_matlab_" in script_dir:
                         if not os.listdir(script_dir): os.rmdir(script_dir)
                         else: print(f"Warning: Temp directory {script_dir} not empty, not removed.")
@@ -497,6 +511,9 @@ class MatlabCommandWorker(QObject):
                     print(f"Warning: Could not clean up temp script/dir '{self.script_file}': {e}") 
             self.finished_signal.emit(success, message, output_data_for_signal)
 
+# ... (Keep DraggableToolButton, GraphicsStateItem, GraphicsTransitionItem, Undo Commands, DiagramScene, ZoomableView, Dialogs as they were in the previous corrected response) ...
+# ... (MainWindow class also remains largely the same, with fixes from prior step) ...
+# The following classes are repeated from the prior correctly functioning version to make this runnable
 
 # --- Draggable Toolbox Buttons ---
 class DraggableToolButton(QPushButton):
@@ -506,15 +523,16 @@ class DraggableToolButton(QPushButton):
         self.setText(text) 
         self.setMinimumHeight(40)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Ensure text is aligned beside icon if icon is present
         self.setStyleSheet(style_sheet + " QPushButton { border-radius: 5px; text-align: left; padding-left: 5px; }")
         self.drag_start_position = QPoint()
 
-    def mousePressEvent(self, event: QMouseEvent):
+    def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.drag_start_position = event.pos()
         super().mousePressEvent(event)
 
-    def mouseMoveEvent(self, event: QMouseEvent):
+    def mouseMoveEvent(self, event):
         if not (event.buttons() & Qt.LeftButton):
             return
         if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
@@ -533,7 +551,7 @@ class DraggableToolButton(QPushButton):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        button_rect = QRectF(0,0, pixmap_size.width()-1, pixmap_size.height()-1)
+        button_rect = QRectF(0,0, pixmap_size.width()-1, pixmap_size.height()-1) # -1 for crisp border
         current_style = self.styleSheet()
         bg_color = QColor("#B0E0E6") 
         if "background-color:" in current_style:
@@ -552,20 +570,20 @@ class DraggableToolButton(QPushButton):
         painter.drawRoundedRect(button_rect.adjusted(0.5,0.5,-0.5,-0.5), 5, 5)
 
         icon_pixmap = self.icon().pixmap(QSize(24,24), QIcon.Normal, QIcon.On)
-        text_x_offset = 8 
+        text_x_offset = 8 # Increased padding
         icon_y_offset = (pixmap_size.height() - icon_pixmap.height()) / 2
         if not icon_pixmap.isNull():
             painter.drawPixmap(int(text_x_offset), int(icon_y_offset), icon_pixmap)
-            text_x_offset += icon_pixmap.width() + 8 
+            text_x_offset += icon_pixmap.width() + 8 # Space after icon
         
-        painter.setPen(self.palette().buttonText().color()) 
+        painter.setPen(self.palette().buttonText().color()) # Use theme's text color
         painter.setFont(self.font())
         text_rect = QRectF(text_x_offset, 0, pixmap_size.width() - text_x_offset - 5, pixmap_size.height())
         painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, self.text())
         painter.end()
 
         drag.setPixmap(pixmap)
-        drag.setHotSpot(QPoint(pixmap.width() // 4, pixmap.height() // 2)) 
+        drag.setHotSpot(QPoint(pixmap.width() // 4, pixmap.height() // 2)) # Hotspot more to the left
 
         drag.exec_(Qt.CopyAction | Qt.MoveAction)
 
@@ -591,7 +609,7 @@ class GraphicsStateItem(QGraphicsRectItem):
                       QGraphicsItem.ItemIsFocusable)
         self.setAcceptHoverEvents(True) 
 
-    def paint(self, painter: QPainter, option, widget):
+    def paint(self, painter, option, widget):
         painter.setRenderHint(QPainter.Antialiasing)
         
         painter.setPen(self.pen())
@@ -696,11 +714,11 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         self.setAcceptHoverEvents(True)
         self.update_path()
 
-    def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent):
+    def hoverEnterEvent(self, event: QEvent): # Corrected type hint
         self.setPen(QPen(QColor(0, 160, 160), 3)) 
         super().hoverEnterEvent(event)
 
-    def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent):
+    def hoverLeaveEvent(self, event: QEvent): # Corrected type hint
         self.setPen(QPen(QColor(0, 120, 120), 2.5))
         super().hoverLeaveEvent(event)
 
@@ -782,7 +800,7 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         self.setPath(path)
         self.prepareGeometryChange()
 
-    def _get_intersection_point(self, item, line: QLineF): # Added QLineF type hint for line
+    def _get_intersection_point(self, item, line):
         item_rect = item.sceneBoundingRect() 
         
         edges = [
@@ -793,36 +811,29 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         ]
         
         intersect_points = []
+        temp_intersect_point = QPointF() 
         for edge in edges:
-            # QLineF.intersect requires a QPointF to store the result.
-            # The IntersectType enum indicates if and how they intersect.
-            intersection_point_var = QPointF() 
-            intersect_type = line.intersect(edge, intersection_point_var)
-            
-            if intersect_type == QLineF.BoundedIntersection:
-                # Check if the intersection point lies on the segment of 'edge'
-                # This is an additional check sometimes needed due to floating point arithmetic.
-                # However, QLineF.BoundedIntersection should theoretically mean it's on both segments.
-                edge_rect_for_check = QRectF(edge.p1(), edge.p2()).normalized()
-                epsilon = 1e-3 
-                if (edge_rect_for_check.left() - epsilon <= intersection_point_var.x() <= edge_rect_for_check.right() + epsilon and
-                    edge_rect_for_check.top() - epsilon <= intersection_point_var.y() <= edge_rect_for_check.bottom() + epsilon):
-                    intersect_points.append(QPointF(intersection_point_var)) # Store a copy
+            intersect_type = line.intersect(edge, temp_intersect_point) # Removed type hint from QPointF
+            if intersect_type == QLineF.BoundedIntersection :
+                 edge_rect_for_check = QRectF(edge.p1(), edge.p2()).normalized()
+                 epsilon = 1e-3 
+                 if (edge_rect_for_check.left() - epsilon <= temp_intersect_point.x() <= edge_rect_for_check.right() + epsilon and
+                     edge_rect_for_check.top() - epsilon <= temp_intersect_point.y() <= edge_rect_for_check.bottom() + epsilon):
+                    intersect_points.append(QPointF(temp_intersect_point))
 
         if not intersect_points:
             return item_rect.center() 
 
         closest_point = intersect_points[0]
-        min_dist_sq = (QLineF(line.p1(), closest_point).length()) ** 2 # CORRECTED
+        min_dist_sq = QLineF(line.p1(), closest_point).lengthSquared() 
         for pt in intersect_points[1:]:
-            dist_sq = (QLineF(line.p1(), pt).length()) ** 2 # CORRECTED
+            dist_sq = QLineF(line.p1(), pt).lengthSquared()
             if dist_sq < min_dist_sq:
                 min_dist_sq = dist_sq
                 closest_point = pt
         return closest_point
 
-
-    def paint(self, painter: QPainter, option, widget):
+    def paint(self, painter, option, widget):
         if not self.start_item or not self.end_item or self.path().isEmpty():
             return
 
@@ -830,6 +841,10 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         current_pen = self.pen() 
         
         if self.isSelected():
+            # selection_pen = QPen(QColor(0,100,255,180), current_pen.widthF() + 2, Qt.SolidLine) 
+            # selection_pen.setCapStyle(Qt.RoundCap)
+            # selection_pen.setJoinStyle(Qt.RoundJoin)
+            
             stroker = QPainterPathStroker()
             stroker.setWidth(current_pen.widthF() + 8) 
             stroker.setCapStyle(Qt.RoundCap)
@@ -912,12 +927,12 @@ class GraphicsTransitionItem(QGraphicsPathItem):
 
 
 # --- Undo Commands ---
-# (These classes AddItemCommand, RemoveItemsCommand, MoveItemsCommand, EditItemPropertiesCommand remain unchanged from previous correct versions)
 class AddItemCommand(QUndoCommand):
     def __init__(self, scene, item, description="Add Item"):
         super().__init__(description)
         self.scene = scene
         self.item_instance = item 
+
         if isinstance(item, GraphicsTransitionItem):
             self.start_item_name = item.start_item.text_label if item.start_item else None
             self.end_item_name = item.end_item.text_label if item.end_item else None
@@ -929,6 +944,7 @@ class AddItemCommand(QUndoCommand):
     def redo(self):
         if self.item_instance.scene() is None: 
             self.scene.addItem(self.item_instance)
+
         if isinstance(self.item_instance, GraphicsTransitionItem):
             start_node = self.scene.get_state_by_name(self.start_item_name)
             end_node = self.scene.get_state_by_name(self.end_item_name)
@@ -938,6 +954,7 @@ class AddItemCommand(QUndoCommand):
                 self.item_instance.update_path()
             else:
                 self.scene.log_function(f"Error (Redo Add Transition): Could not link transition '{self.label}'. Source '{self.start_item_name}' or Target '{self.end_item_name}' state missing.")
+        
         self.scene.clearSelection()
         self.item_instance.setSelected(True)
         self.scene.set_dirty(True)
@@ -955,6 +972,7 @@ class RemoveItemsCommand(QUndoCommand):
             item_data = item.get_data()
             item_data['_type'] = item.type() 
             self.removed_items_data.append(item_data)
+        
         self.item_instances_for_quick_toggle = list(items_to_remove)
 
     def redo(self): 
@@ -966,6 +984,7 @@ class RemoveItemsCommand(QUndoCommand):
     def undo(self):
         newly_added_instances = []
         states_map_for_undo = {}
+
         for item_data in self.removed_items_data:
             if item_data['_type'] == GraphicsStateItem.Type:
                 state = GraphicsStateItem(item_data['x'], item_data['y'], item_data['width'], item_data['height'],
@@ -973,6 +992,7 @@ class RemoveItemsCommand(QUndoCommand):
                 self.scene.addItem(state)
                 newly_added_instances.append(state)
                 states_map_for_undo[state.text_label] = state
+        
         for item_data in self.removed_items_data:
             if item_data['_type'] == GraphicsTransitionItem.Type:
                 src_item = states_map_for_undo.get(item_data['source'])
@@ -984,6 +1004,7 @@ class RemoveItemsCommand(QUndoCommand):
                     newly_added_instances.append(trans)
                 else:
                     self.scene.log_function(f"Error (Undo Remove): Could not re-link transition '{item_data['label']}'. States missing.")
+        
         self.item_instances_for_quick_toggle = newly_added_instances
         self.scene.set_dirty(True)
 
@@ -1004,11 +1025,15 @@ class MoveItemsCommand(QUndoCommand):
             item.setPos(pos) 
             if isinstance(item, GraphicsStateItem):
                  self.scene_ref._update_connected_transitions(item)
+
         self.scene_ref.update() 
         self.scene_ref.set_dirty(True)
 
-    def redo(self): self._apply_positions(self.items_and_new_positions)
-    def undo(self): self._apply_positions(self.items_and_old_positions)
+    def redo(self):
+        self._apply_positions(self.items_and_new_positions)
+    
+    def undo(self):
+        self._apply_positions(self.items_and_old_positions)
 
 class EditItemPropertiesCommand(QUndoCommand):
     def __init__(self, item, old_props, new_props, description="Edit Properties"):
@@ -1020,6 +1045,7 @@ class EditItemPropertiesCommand(QUndoCommand):
 
     def _apply_properties(self, props_to_apply):
         if not self.item or not self.scene_ref: return
+
         original_name_if_state = None
         if isinstance(self.item, GraphicsStateItem):
             original_name_if_state = self.item.text_label 
@@ -1028,19 +1054,29 @@ class EditItemPropertiesCommand(QUndoCommand):
                                      props_to_apply.get('is_final', False))
             if original_name_if_state != props_to_apply['name']:
                 self.scene_ref._update_transitions_for_renamed_state(original_name_if_state, props_to_apply['name'])
+        
         elif isinstance(self.item, GraphicsTransitionItem):
             self.item.set_text(props_to_apply['label'])
             if 'control_offset_x' in props_to_apply and 'control_offset_y' in props_to_apply:
                  self.item.set_control_point_offset(QPointF(props_to_apply['control_offset_x'], 
                                                             props_to_apply['control_offset_y']))
+        
         self.item.update() 
         self.scene_ref.update() 
         self.scene_ref.set_dirty(True)
 
-    def redo(self): self._apply_properties(self.new_props)
-    def undo(self): self._apply_properties(self.old_props)
+    def redo(self):
+        self._apply_properties(self.new_props)
+
+    def undo(self):
+        self._apply_properties(self.old_props)
+
 
 # --- Diagram Scene ---
+# Use the definition from the previous correctly working claude.py (version from previous successful run)
+# This class and its methods were quite long and mostly correct before.
+# Assuming DiagramScene and its methods like _update_connected_transitions, etc., are correctly defined
+# as in the version that led to the QTime error (meaning, structurally it was mostly fine).
 class DiagramScene(QGraphicsScene):
     item_moved = pyqtSignal(QGraphicsItem)
     modifiedStatusChanged = pyqtSignal(bool) 
@@ -1143,9 +1179,9 @@ class DiagramScene(QGraphicsScene):
         if isinstance(moved_item, GraphicsStateItem):
             self._update_connected_transitions(moved_item)
             if self.snap_to_grid_enabled and self._mouse_press_items_positions: 
-                pass # Snapping handled in mouseReleaseEvent for MoveCommand
+                pass
 
-    def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
+    def mousePressEvent(self, event): # Removed type hint QGraphicsSceneMouseEvent
         pos = event.scenePos()
         items_at_pos = self.items(pos)
         state_item_at_pos = next((item for item in items_at_pos if isinstance(item, GraphicsStateItem)), None)
@@ -1183,13 +1219,13 @@ class DiagramScene(QGraphicsScene):
         else: 
             super().mousePressEvent(event)
     
-    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
+    def mouseMoveEvent(self, event): # Removed type hint
         if self.current_mode == "transition" and self.transition_start_item and self._temp_transition_line:
             self._temp_transition_line.setLine(QLineF(self.transition_start_item.sceneBoundingRect().center(), event.scenePos()))
         else:
             super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
+    def mouseReleaseEvent(self, event): # Removed type hint
         if event.button() == Qt.LeftButton and self.current_mode == "select":
             if self._mouse_press_items_positions: 
                 moved_items_data = []
@@ -1211,7 +1247,7 @@ class DiagramScene(QGraphicsScene):
                 self._mouse_press_items_positions.clear()
         super().mouseReleaseEvent(event)
 
-    def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent):
+    def mouseDoubleClickEvent(self, event): # Removed type hint
         items_at_pos = self.items(event.scenePos())
         state_item_at_pos = next((item for item in items_at_pos if isinstance(item, GraphicsStateItem)), None)
         item_to_edit = state_item_at_pos
@@ -1337,7 +1373,7 @@ class DiagramScene(QGraphicsScene):
             self.transition_start_item = None 
             self.set_mode("select") 
 
-    def keyPressEvent(self, event: QKeyEvent): 
+    def keyPressEvent(self, event: QKeyEvent): # Corrected Type Hint
         if event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace:
             if self.selectedItems():
                 self.delete_selected_items()
@@ -1373,20 +1409,20 @@ class DiagramScene(QGraphicsScene):
             self.log_function(f"Queued deletion of {len(items_to_delete_with_related)} item(s).")
             self.clearSelection() 
 
-    def dragEnterEvent(self, event: QGraphicsSceneDragDropEvent): 
+    def dragEnterEvent(self, event): # Corrected QGraphicsSceneDragDropEvent type hint for these three
         if event.mimeData().hasFormat("application/x-state-tool"):
             event.setAccepted(True) 
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
 
-    def dragMoveEvent(self, event: QGraphicsSceneDragDropEvent): 
+    def dragMoveEvent(self, event):
         if event.mimeData().hasFormat("application/x-state-tool"):
             event.acceptProposedAction()
         else:
             super().dragMoveEvent(event)
 
-    def dropEvent(self, event: QGraphicsSceneDragDropEvent): 
+    def dropEvent(self, event):
         pos = event.scenePos()
         if event.mimeData().hasFormat("application/x-state-tool"):
             dropped_text = event.mimeData().text() 
@@ -1444,7 +1480,7 @@ class DiagramScene(QGraphicsScene):
         self.set_dirty(False) 
         self.undo_stack.clear()
 
-    def drawBackground(self, painter: QPainter, rect: QRectF):
+    def drawBackground(self, painter: QPainter, rect: QRectF): # Corrected type hint
         super().drawBackground(painter, rect)
 
         view_rect = self.views()[0].viewport().rect() if self.views() else rect
@@ -1464,20 +1500,16 @@ class DiagramScene(QGraphicsScene):
                  if (x % (self.grid_size * 5) != 0) and (y % (self.grid_size * 5) != 0): 
                     painter.drawPoint(x, y)
 
-        # This section seems to be for major grid lines, which were previously full lines.
-        # If dots are preferred everywhere, this section for 'dark_lines' might be redundant
-        # or needs adjustment if a mix of dots and lines is desired.
-        # For purely dotted grid, comment out or remove dark_lines drawing.
+        dark_lines = []
         major_grid_size = self.grid_size * 5
         first_major_left = left - (left % major_grid_size)
         first_major_top = top - (top % major_grid_size)
 
-        painter.setPen(self.grid_pen_dark) # Using darker pen for these
+        painter.setPen(self.grid_pen_dark)
         for x in range(first_major_left, right, major_grid_size):
             painter.drawLine(x, top, x, bottom)
         for y in range(first_major_top, bottom, major_grid_size):
             painter.drawLine(left, y, right, y)
-
 
 # --- Zoomable Graphics View ---
 class ZoomableView(QGraphicsView):
@@ -1494,7 +1526,7 @@ class ZoomableView(QGraphicsView):
         self._is_panning_with_mouse = False
         self._last_pan_point = QPoint()
 
-    def wheelEvent(self, event: QWheelEvent): 
+    def wheelEvent(self, event): # Removed QWheelEvent type hint
         if event.modifiers() & Qt.ControlModifier:
             delta = event.angleDelta().y()
             if delta > 0: factor = 1.12; self.zoom_level += 1
@@ -1537,7 +1569,7 @@ class ZoomableView(QGraphicsView):
         else:
             super().keyReleaseEvent(event)
 
-    def mousePressEvent(self, event: QMouseEvent): 
+    def mousePressEvent(self, event): # Removed QMouseEvent type hint
         if event.button() == Qt.MiddleButton or \
            (self._is_panning and event.button() == Qt.LeftButton):
             self._last_pan_point = event.pos() 
@@ -1548,7 +1580,7 @@ class ZoomableView(QGraphicsView):
             self._is_panning_with_mouse = False
             super().mousePressEvent(event)
 
-    def mouseMoveEvent(self, event: QMouseEvent): 
+    def mouseMoveEvent(self, event): # Removed QMouseEvent type hint
         if self._is_panning_with_mouse:
             delta_view = event.pos() - self._last_pan_point 
             self._last_pan_point = event.pos()
@@ -1561,7 +1593,7 @@ class ZoomableView(QGraphicsView):
         else:
             super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event: QMouseEvent): 
+    def mouseReleaseEvent(self, event): # Removed QMouseEvent type hint
         if self._is_panning_with_mouse and \
            (event.button() == Qt.MiddleButton or (self._is_panning and event.button() == Qt.LeftButton)):
             if self._is_panning: 
@@ -1705,7 +1737,7 @@ class MatlabSettingsDialog(QDialog):
         self.test_status_label.setText("Status: Auto-detecting MATLAB, please wait...")
         self.test_status_label.setStyleSheet("")
         QApplication.processEvents() 
-        self.matlab_connection.detect_matlab() 
+        self.matlab_connection.detect_matlab() # Signal will update the label via _update_test_label_from_signal
 
     def _browse(self):
         exe_filter = "MATLAB Executable (matlab.exe)" if sys.platform == 'win32' else "MATLAB Executable (matlab);;All Files (*)"
@@ -1727,6 +1759,7 @@ class MatlabSettingsDialog(QDialog):
         
         if self.matlab_connection.set_matlab_path(path):
             self.matlab_connection.test_connection()
+        # else: set_matlab_path would have emitted an error if path was bad structually
 
     def _update_test_label_from_signal(self, success, message):
         status_prefix = "Status: "
@@ -1741,7 +1774,8 @@ class MatlabSettingsDialog(QDialog):
 
     def _apply_settings(self):
         path = self.path_edit.text().strip()
-        self.matlab_connection.set_matlab_path(path) 
+        self.matlab_connection.set_matlab_path(path) # This will store path, or clear if invalid.
+                                                    # It also emits status.
         self.accept()
 
 # --- Main Window ---
@@ -1770,6 +1804,9 @@ class MainWindow(QMainWindow):
 
         self.scene.selectionChanged.connect(self._update_properties_dock)
         self._update_properties_dock()
+
+        # QTimer.singleShot(1000, self.matlab_connection.detect_matlab) 
+
 
     def init_ui(self):
         self.setGeometry(50, 50, 1500, 950) 
@@ -2262,6 +2299,7 @@ class MainWindow(QMainWindow):
         return False 
 
     def _save_to_path(self, file_path):
+        # Use QSaveFile for atomic saving
         save_file = QSaveFile(file_path)
         if not save_file.open(QIODevice.WriteOnly | QIODevice.Text):
             self.log_message(f"Error opening save file {file_path}: {save_file.errorString()}")
@@ -2280,7 +2318,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.log_message(f"Error preparing data or writing to save file {file_path}: {str(e)}")
             QMessageBox.critical(self, "Save Error", f"An error occurred during saving:\n{str(e)}")
-            save_file.cancelWriting() 
+            save_file.cancelWriting() # Important to clean up
             return False
             
     def on_select_all(self):
@@ -2455,7 +2493,7 @@ class MainWindow(QMainWindow):
                           "<p>This tool is intended for research and educational purposes in designing and "
                           "simulating complex state-based systems.</p>")
 
-    def closeEvent(self, event: QCloseEvent): 
+    def closeEvent(self, event): # Corrected QCloseEvent type hint
         if self._prompt_save_if_dirty():
             active_threads = list(self.matlab_connection._active_threads) 
             if active_threads:
@@ -2466,10 +2504,8 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == '__main__':
-    if hasattr(Qt, 'AA_EnableHighDpiScaling'):
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
     app = QApplication(sys.argv)
     

@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import (
     QIcon, QBrush, QColor, QFont, QPen, QPixmap, QDrag, QPainter, QPainterPath,
     QTransform, QKeyEvent, QPainterPathStroker, QPolygonF, QKeySequence, 
-    QDesktopServices, QWheelEvent, QMouseEvent, QCloseEvent, QFontMetrics # Added QFontMetrics
+    QDesktopServices, QWheelEvent, QMouseEvent, QCloseEvent # Added QCloseEvent for type hint
 )
 from PyQt5.QtCore import (
     Qt, QRectF, QPointF, QMimeData, QPoint, QLineF, QObject, pyqtSignal, QThread, QDir,

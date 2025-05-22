@@ -1371,10 +1371,9 @@ class MainWindow(QMainWindow):
         
         self.scene = DiagramScene(self.undo_stack, self)
         self.scene.set_log_function(self.log_message)
-        # This connection is correct for updating the modified state of the window
         self.scene.modifiedStatusChanged.connect(self.setWindowModified) 
-        # This connection updates the title string when the modified state changes
         self.scene.modifiedStatusChanged.connect(self._update_window_title) 
+        self.scene.modifiedStatusChanged.connect(self._update_save_actions_enable_state)
 
 
         self.init_ui()
@@ -1384,9 +1383,9 @@ class MainWindow(QMainWindow):
         self.matlab_connection.simulationFinished.connect(self._handle_matlab_modelgen_or_sim_finished)
         self.matlab_connection.codeGenerationFinished.connect(self._handle_matlab_codegen_finished) 
 
-        # self.setWindowTitle(f"{APP_NAME}") # This initial setWindowTitle is okay, but _update_window_title will refine it
-        self._update_window_title() # Call this to set the initial title correctly with placeholder
-        self.on_new_file(silent=True)  
+        self.setWindowTitle(f"{APP_NAME}")
+        self._update_window_title() 
+        self.on_new_file(silent=True) 
 
     def init_ui(self):
         self.setGeometry(100, 100, 1400, 900)
@@ -1409,15 +1408,16 @@ class MainWindow(QMainWindow):
             try:
                 return getattr(QStyle, attr_name)
             except AttributeError:
-                # Optional: Make warning less intrusive or log it differently
-                # print(f"Debug: QStyle attribute '{attr_name}' not found.") 
+                print(f"Warning: QStyle attribute '{attr_name}' not found.")
                 if fallback_attr_name:
                     try:
-                        # print(f"Debug: Trying fallback QStyle attribute '{fallback_attr_name}'.")
+                        print(f"Trying fallback QStyle attribute '{fallback_attr_name}'.")
                         return getattr(QStyle, fallback_attr_name)
                     except AttributeError:
-                        # print(f"Debug: Fallback QStyle attribute '{fallback_attr_name}' also not found.")
-                        pass # Suppress further messages if fallback also fails
+                        print(f"Warning: Fallback QStyle attribute '{fallback_attr_name}' also not found.")
+                # Return a value that typically results in a null icon if the enum itself is missing
+                # QStyle.SP_CustomBase should be a safe integer value that exists in the enum definition
+                # even if no actual icon is provided by the style for it.
                 return QStyle.SP_CustomBase 
 
 
@@ -1600,9 +1600,8 @@ class MainWindow(QMainWindow):
         else:
             title += " - Untitled"
         
-        # This is the crucial part: always include [*] when setting the title string
-        # The self.isWindowModified() call will then determine if the asterisk is shown or hidden.
-        title += "[*]" 
+        if self.isWindowModified(): 
+            title += "[*]"
         self.setWindowTitle(title)
 
     def _update_save_actions_enable_state(self):

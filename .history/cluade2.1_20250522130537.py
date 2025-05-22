@@ -1363,8 +1363,8 @@ class MatlabSettingsDialog(QDialog):
 
 # --- Main Window ---
 class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+        def __init__(self):
+            super().__init__()
         self.current_file_path = None
         self.matlab_connection = MatlabConnection()
         self.undo_stack = QUndoStack(self)
@@ -1386,7 +1386,7 @@ class MainWindow(QMainWindow):
 
         # self.setWindowTitle(f"{APP_NAME}") # This initial setWindowTitle is okay, but _update_window_title will refine it
         self._update_window_title() # Call this to set the initial title correctly with placeholder
-        self.on_new_file(silent=True)  
+        self.on_new_file(silent=True) 
 
     def init_ui(self):
         self.setGeometry(100, 100, 1400, 900)

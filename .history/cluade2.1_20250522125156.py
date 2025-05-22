@@ -11,17 +11,17 @@ from PyQt5.QtWidgets import (
     QInputDialog, QLineEdit, QColorDialog, QDialog, QFormLayout,
     QSpinBox, QComboBox, QGraphicsRectItem, QGraphicsPathItem, QDialogButtonBox,
     QFileDialog, QProgressBar, QTabWidget, QCheckBox, QActionGroup, QGraphicsItem,
-    QGroupBox, QUndoStack, QUndoCommand, QStyle, QSizePolicy, QGraphicsLineItem
+    QGroupBox, QUndoStack, QUndoCommand, QStyle, QSizePolicy, QGraphicsLineItem # Added QGraphicsLineItem
 )
 from PyQt5.QtGui import (
     QIcon, QBrush, QColor, QFont, QPen, QPixmap, QDrag, QPainter, QPainterPath,
-    QTransform, QKeyEvent, QPainterPathStroker, QPolygonF
+    QTransform, QKeyEvent, QPainterPathStroker, QPolygonF # Added QPolygonF
 )
 from PyQt5.QtCore import (
     Qt, QRectF, QPointF, QMimeData, QPoint, QLineF, QObject, pyqtSignal, QThread, QDir,
-    QEvent, QTimer
+    QEvent, QTimer # Added QTimer
 )
-import math
+import math # For arrowhead calculations
 
 
 # --- Configuration ---
@@ -31,26 +31,16 @@ FILE_EXTENSION = ".bsm"
 FILE_FILTER = f"Brain State Machine Files (*{FILE_EXTENSION});;All Files (*)"
 
 # --- Utility Functions ---
-def get_standard_icon(standard_pixmap_enum_value, fallback_text=None):
-    # standard_pixmap_enum_value is now the actual enum value (e.g., QStyle.SP_FileIcon)
-    icon = QIcon() # Default to empty icon
-    try:
-        # This call itself should handle invalid enum values gracefully by returning a null icon.
-        icon = QApplication.style().standardIcon(standard_pixmap_enum_value)
-    except Exception as e: # Catch any unexpected error during icon retrieval
-        print(f"Warning: Error getting standard icon for enum value {standard_pixmap_enum_value}: {e}")
-        icon = QIcon() # Ensure icon is QIcon instance
-    
-    if icon.isNull():
-        if fallback_text:
-            pixmap = QPixmap(32, 32)
-            pixmap.fill(Qt.transparent)
-            painter = QPainter(pixmap)
-            painter.drawText(pixmap.rect(), Qt.AlignCenter, fallback_text[:2])
-            painter.end()
-            return QIcon(pixmap)
-        else:
-            return QIcon() # Return empty icon if no text fallback and standard icon is null
+def get_standard_icon(standard_pixmap, fallback_text=None):
+    icon = QApplication.style().standardIcon(standard_pixmap)
+    if icon.isNull() and fallback_text:
+        # Basic fallback if standard icon not found (e.g. on some systems)
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, fallback_text[:2])
+        painter.end()
+        return QIcon(pixmap)
     return icon
 
 # --- MATLAB Connection Handling ---
@@ -121,10 +111,10 @@ class MatlabConnection(QObject):
         paths = []
         if sys.platform == 'win32':
             program_files = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
-            versions = ['R2024a', 'R2023b', 'R2023a', 'R2022b', 'R2022a', 'R2021b']
+            versions = ['R2024a', 'R2023b', 'R2023a', 'R2022b', 'R2022a', 'R2021b'] # Add more versions
             for v in versions:
                 paths.append(os.path.join(program_files, 'MATLAB', v, 'bin', 'matlab.exe'))
-        elif sys.platform == 'darwin':
+        elif sys.platform == 'darwin':  # macOS
             versions = ['R2024a', 'R2023b', 'R2023a', 'R2022b', 'R2022a', 'R2021b']
             for v in versions:
                 paths.append(f'/Applications/MATLAB_{v}.app/bin/matlab')
@@ -135,13 +125,14 @@ class MatlabConnection(QObject):
 
         for path in paths:
             if os.path.exists(path):
-                self.set_matlab_path(path)
+                self.set_matlab_path(path) # This will emit connectionStatusChanged
                 return True
         self.connectionStatusChanged.emit(False, "MATLAB auto-detection failed.")
         return False
 
     def _run_matlab_script(self, script_content, worker_signal, success_message_prefix):
         if not self.connected:
+            # Ensure 3 args for codegen, 3 for simulationFinished/modelgen
             worker_signal.emit(False, "MATLAB not connected.", "")
             return
 
@@ -155,7 +146,8 @@ class MatlabConnection(QObject):
         worker.moveToThread(thread)
 
         thread.started.connect(worker.run_command)
-        worker.finished_signal.connect(thread.quit)
+        worker.finished_signal.connect(thread.quit) # Worker signals when it's done
+        # Clean up thread and worker after they finish
         worker.finished_signal.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
         
@@ -165,7 +157,8 @@ class MatlabConnection(QObject):
         thread.start()
 
 
-    def generate_simulink_model(self, states, transitions, output_dir, model_name="BrainStateMachine"):
+    def generate_simulink_model(self, states, transitions, output_dir, model_name="BrainStateMachine"): # Removed actions_data
+        """Generate a Simulink model file (.slx) from the state machine."""
         if not self.connected:
             self.simulationFinished.emit(False, "MATLAB not connected.", "") 
             return False
@@ -182,28 +175,27 @@ class MatlabConnection(QObject):
             "    if bdIsLoaded(modelName), close_system(modelName, 0); end",
             "    new_system(modelName);",
             "    open_system(modelName);",
-            "    sfChart = Stateflow.Chart(modelName);",
+            "    sfChart = Stateflow.Chart(modelName);", # Create chart directly in model
             "    sfChart.Name = 'BrainStateMachineChart';",
             "    stateHandles = containers.Map('KeyType','char','ValueType','any');"
         ]
 
         for i, state in enumerate(states):
             s_name_matlab = state['name'].replace("'", "''") 
-            s_id_matlab_safe = f"state_{i}_{state['name'].replace(' ', '_').replace('-', '_')}";
-            s_id_matlab_safe = ''.join(filter(str.isalnum, s_id_matlab_safe))
-            if not s_id_matlab_safe or not s_id_matlab_safe[0].isalpha(): s_id_matlab_safe = 's_' + s_id_matlab_safe
-
+            s_id_matlab_safe = f"state_{i}_{state['name'].replace(' ', '_').replace('-', '_')}"; # Make it more readable
+            s_id_matlab_safe = ''.join(filter(str.isalnum, s_id_matlab_safe)) # Ensure valid var name
+            if not s_id_matlab_safe.startswith('state_'): s_id_matlab_safe = 's_' + s_id_matlab_safe # ensure starts with letter
 
             script_lines.extend([
                 f"{s_id_matlab_safe} = Stateflow.State(sfChart);",
                 f"{s_id_matlab_safe}.Name = '{s_name_matlab}';",
-                f"{s_id_matlab_safe}.Position = [{state['x']/5}, {state['y']/5}, {state['width']/5}, {state['height']/5}];",
+                f"{s_id_matlab_safe}.Position = [{state['x']/5}, {state['y']/5}, {state['width']/5}, {state['height']/5}];", # Scale down for reasonable Simulink units
                 f"stateHandles('{s_name_matlab}') = {s_id_matlab_safe};"
             ])
             if state.get('is_initial', False):
                 script_lines.append(f"defaultTransition_{i} = Stateflow.Transition(sfChart);")
                 script_lines.append(f"defaultTransition_{i}.Destination = {s_id_matlab_safe};")
-                script_lines.append(f"defaultTransition_{i}.Source = [];")
+                script_lines.append(f"defaultTransition_{i}.Source = []; % Explicitly set source to empty for default transition")
 
         for i, trans in enumerate(transitions):
             src_name_matlab = trans['source'].replace("'", "''")
@@ -261,7 +253,7 @@ class MatlabConnection(QObject):
             disp(['Simulating model: ', modelName, ' for ', num2str({sim_time}), ' seconds.']);
             simOut = sim(modelName);
             disp('Simulation completed successfully.');
-            fprintf('MATLAB_SCRIPT_SUCCESS:Simulation finished for %s.\\n', modelName);
+            fprintf('MATLAB_SCRIPT_SUCCESS:Simulation finished for %s.\\n', modelName); % Data part of success message here
         catch e
             disp(['Simulation error: ', getReport(e, 'extended')]);
             if bdIsLoaded(modelName), close_system(modelName, 0); end 
@@ -283,21 +275,23 @@ class MatlabConnection(QObject):
         
         if not output_dir_base:
             output_dir_base = os.path.dirname(model_path)
-        output_dir_matlab = os.path.join(output_dir_base, f"{model_name}_codegen").replace('\\', '/')
+        output_dir_matlab = os.path.join(output_dir_base, f"{model_name}_codegen").replace('\\', '/') # Specific subfolder
 
 
         script_content = f"""
         disp('Starting code generation...');
         modelPath = '{model_path_matlab}';
         modelName = '{model_name}';
-        outputDirBaseForMatlab = '{output_dir_matlab}';
+        outputDirBaseForMatlab = '{output_dir_matlab}'; % This is the base for codegen folder
         
         try
             load_system(modelPath);
             
+            % Set active configuration set to ERT
             set_param(modelName,'SystemTargetFile','ert.tlc');
-            set_param(modelName,'GenerateMakefile','on');
+            set_param(modelName,'GenerateMakefile','on'); % Ensure makefile is generated
 
+            % Set up configuration object for C/C++ code generation
             cfg = getActiveConfigSet(modelName);
             if strcmpi('{language}', 'C++')
                 set_param(cfg, 'TargetLang', 'C++');
@@ -309,19 +303,31 @@ class MatlabConnection(QObject):
             set_param(cfg, 'GenerateReport', 'on');
             set_param(cfg, 'GenCodeOnly', 'on'); 
             
+            % Specify the code generation folder relative to the model or an absolute path
+            % For ert.tlc, the output is often in <modelName>_ert_rtw within the current directory
+            % or a specified CodeGenFolder. Let's use a specific output directory.
+            
             codeGenFolder = fullfile(outputDirBaseForMatlab); 
             if ~exist(codeGenFolder, 'dir')
                mkdir(codeGenFolder);
             end
             
+            % Set build arguments if using rtwbuild explicitly, or configure via set_param
+            % For ERT, 'slbuild' or 'rtwbuild' is typically used.
+            % 'rtwbuild' needs to be called from the directory where it creates the <model>_ert_rtw folder
+            % or it needs CodeGenFolder to be set appropriately in the model's parameters.
+            % Let's ensure CodeGenFolder is set for clarity
             cs = getActiveConfigSet(modelName);
-            set_param(cs.getComponent('Code Generation'),'TargetLangStandard', 'C++11 (ISO)');
-            set_param(cs.getComponent('Code Generation'),'CodeInterfacePackaging', 'Reusable function');
+            set_param(cs.getComponent('Code Generation'),'TargetLangStandard', 'C++11 (ISO)'); % Example for C++
+            set_param(cs.getComponent('Code Generation'),'CodeInterfacePackaging', 'Reusable function'); % Example
             
+            % Using slbuild is often more robust for ERT targets
             disp(['Code generation output target directory: ', codeGenFolder]);
             slbuild(modelName, 'StandaloneRTWTarget', 'GenCodeOnly', true, 'CodeGenerationFolder', codeGenFolder);
             disp('Code generation command (slbuild) executed.');
             
+            % The actual code is typically in a subfolder like <modelName>_ert_rtw or similar
+            % Let's report the primary 'codeGenFolder' we specified.
             actualCodeDir = codeGenFolder; 
 
             disp(['Code generation successful. Code and report expected in: ', actualCodeDir]);
@@ -337,7 +343,8 @@ class MatlabConnection(QObject):
         return True
 
 class MatlabCommandWorker(QObject):
-    finished_signal = pyqtSignal(bool, str, str) 
+    """Worker for running a generic MATLAB script."""
+    finished_signal = pyqtSignal(bool, str, str) # success, message, data (e.g. path)
 
     def __init__(self, matlab_path, script_file, original_signal, success_message_prefix):
         super().__init__()
@@ -369,17 +376,17 @@ class MatlabCommandWorker(QObject):
                             output_data_for_signal = line.split(":", 1)[1].strip()
                             break
                     message = f"{self.success_message_prefix} completed successfully."
-                    if output_data_for_signal and self.success_message_prefix != "Simulation":
+                    if output_data_for_signal and self.success_message_prefix != "Simulation": # Don't add "Output data:" for sim
                          message += f" Output at: {output_data_for_signal}"
-                    elif output_data_for_signal and self.success_message_prefix == "Simulation":
-                        message = output_data_for_signal
+                    elif output_data_for_signal and self.success_message_prefix == "Simulation": # For simulation, the data is part of the message
+                        message = output_data_for_signal # E.g. "Simulation finished for MyModel"
 
-                else: 
-                    success = False 
+                else: # No success marker but return code 0
+                    success = False # Treat as failure if marker is missing
                     message = f"{self.success_message_prefix} finished, but success marker not found. MATLAB output: {process.stdout[:200]}"
                     if process.stderr:
                         message += f"\nMATLAB stderr: {process.stderr[:200]}"
-            else: 
+            else: # Non-zero return code
                 success = False
                 error_output = process.stderr or process.stdout
                 message = f"{self.success_message_prefix} failed. MATLAB Error (Return Code {process.returncode}): {error_output[:500]}"
@@ -453,17 +460,17 @@ class GraphicsStateItem(QGraphicsRectItem):
         self._font = QFont("Arial", 10)
 
         self.setPen(QPen(Qt.black, 2))
-        self.setBrush(QBrush(QColor(173, 216, 230)))
+        self.setBrush(QBrush(QColor(173, 216, 230))) # lightblue
         self.setFlags(QGraphicsItem.ItemIsSelectable |
                       QGraphicsItem.ItemIsMovable |
                       QGraphicsItem.ItemSendsGeometryChanges |
-                      QGraphicsItem.ItemIsFocusable)
+                      QGraphicsItem.ItemIsFocusable) # Allow focus for key events if needed by scene
 
     def paint(self, painter, option, widget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(self.pen())
         painter.setBrush(self.brush())
-        painter.drawRoundedRect(self.rect(), 5, 5)
+        painter.drawRoundedRect(self.rect(), 5, 5) # Rounded corners
 
         painter.setPen(self._text_color)
         painter.setFont(self._font)
@@ -472,7 +479,7 @@ class GraphicsStateItem(QGraphicsRectItem):
         if self.is_initial:
             painter.setBrush(Qt.black)
             painter.setPen(QPen(Qt.black, 2))
-            start_x = self.rect().left() - 25
+            start_x = self.rect().left() - 25 # Further out for visibility
             start_y = self.rect().center().y()
             end_x = self.rect().left()
             end_y = self.rect().center().y()
@@ -480,11 +487,16 @@ class GraphicsStateItem(QGraphicsRectItem):
             line = QLineF(QPointF(start_x, start_y), QPointF(end_x, end_y))
             painter.drawLine(line)
             
-            angle_rad = math.atan2(line.dy(), line.dx())
+            angle_rad = math.atan2(line.dy(), line.dx()) # angle of line
             arrow_size = 10
             
+            # Arrow points towards end_x, end_y
+            # Calculate points for arrowhead polygon
+            # Point 1 (tip of arrow) is line.p2()
+            # Point 2
             p2_x = line.p2().x() - arrow_size * math.cos(angle_rad + math.pi / 6)
             p2_y = line.p2().y() - arrow_size * math.sin(angle_rad + math.pi / 6)
+            # Point 3
             p3_x = line.p2().x() - arrow_size * math.cos(angle_rad - math.pi / 6)
             p3_y = line.p2().y() - arrow_size * math.sin(angle_rad - math.pi / 6)
 
@@ -493,7 +505,7 @@ class GraphicsStateItem(QGraphicsRectItem):
 
 
         if self.is_final:
-            painter.setPen(QPen(Qt.black, 2))
+            painter.setPen(QPen(Qt.black, 2)) # Thicker line for final state indication
             inner_rect = self.rect().adjusted(5, 5, -5, -5)
             painter.drawRoundedRect(inner_rect, 3, 3)
 
@@ -501,7 +513,7 @@ class GraphicsStateItem(QGraphicsRectItem):
             pen = QPen(Qt.blue, 2, Qt.DashLine)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
-            painter.drawRect(self.boundingRect())
+            painter.drawRect(self.boundingRect()) # Draw around bounding rect for clarity
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged and self.scene():
@@ -537,7 +549,7 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         self.arrow_size = 10
         self._text_color = Qt.darkGray
         self._font = QFont("Arial", 9, QFont.Bold)
-        self.control_point_offset = QPointF(0,0)
+        self.control_point_offset = QPointF(0,0) # For curved lines, relative to midpoint
 
         self.setPen(QPen(Qt.darkCyan, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.setFlag(QGraphicsItem.ItemIsSelectable, True)
@@ -546,7 +558,7 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         self.update_path()
 
     def boundingRect(self):
-        extra = (self.pen().width() + self.arrow_size) / 2.0 + 10
+        extra = (self.pen().width() + self.arrow_size) / 2.0 + 10 # Added padding for text
         return self.path().boundingRect().adjusted(-extra, -extra-15, extra, extra+5)
 
 
@@ -572,56 +584,72 @@ class GraphicsTransitionItem(QGraphicsPathItem):
 
         path = QPainterPath(start_point)
 
-        if self.start_item == self.end_item:
+        if self.start_item == self.end_item: # Self-loop
             rect = self.start_item.sceneBoundingRect()
             loop_radius_x = rect.width() * 0.5
             loop_radius_y = rect.height() * 0.5
             
+            # Anchor points on the state's top-right quadrant
             c_x, c_y = rect.center().x(), rect.top()
             path.moveTo(c_x + loop_radius_x * 0.3, c_y - loop_radius_y * 0.1)
-            path.cubicTo(c_x + loop_radius_x * 1.2, c_y - loop_radius_y * 1.2,
-                          c_x - loop_radius_x * 0.8, c_y - loop_radius_y * 1.2,
-                          c_x - loop_radius_x * 0.3, c_y - loop_radius_y * 0.1)
-            end_point = path.currentPosition()
+            path.cubicTo(c_x + loop_radius_x * 1.2, c_y - loop_radius_y * 1.2, # Control point 1 (top-right)
+                          c_x - loop_radius_x * 0.8, c_y - loop_radius_y * 1.2, # Control point 2 (top-left)
+                          c_x - loop_radius_x * 0.3, c_y - loop_radius_y * 0.1) # Endpoint
+            end_point = path.currentPosition() # Update end_point for arrowhead
         else:
+            # Midpoint for control point calculation
             mid_x = (start_point.x() + end_point.x()) / 2
             mid_y = (start_point.y() + end_point.y()) / 2
             
+            # Add self.control_point_offset to the midpoint
             ctrl_pt = QPointF(mid_x + self.control_point_offset.x(), mid_y + self.control_point_offset.y())
             
+            # If control_point_offset is zero, it's a straight line, otherwise quadratic bezier
             if self.control_point_offset.isNull():
                  path.lineTo(end_point)
             else:
                  path.quadTo(ctrl_pt, end_point)
         
         self.setPath(path)
-        self.prepareGeometryChange()
+        self.prepareGeometryChange() # Notify system that bounding rect might change
 
     def _get_intersection_point(self, item, line):
         item_rect = item.sceneBoundingRect()
+        
+        # Create a path representing the item's rounded rectangle boundary
+        boundary_path = QPainterPath()
+        boundary_path.addRoundedRect(item_rect, 5, 5) # Match state item's rounding
+
+        # Check intersection with each segment of the boundary path
+        # This is complex. A simpler approach is to use the bounding rect edges.
         points = []
         
-        intersection_point = QPointF() # Reusable QPointF for intersection results
-
         # Top edge
         top_line = QLineF(item_rect.topLeft(), item_rect.topRight())
-        intersect_type = line.intersect(top_line, intersection_point)
-        if intersect_type == QLineF.BoundedIntersection: points.append(QPointF(intersection_point))
+        # QLineF.intersect changed in Qt5.10, returns tuple (IntersectType, QPointF)
+        # For older versions, it might be different. Let's assume Qt 5.10+ style intersection method
+        # intersect_result = line.intersect(top_line) -> This should work if PyQT version is recent enough
+        # However, intersect() method of QLineF returns IntersectType and populates a QPointF passed by pointer.
+        # In Python, this is usually handled by returning a tuple.
+        # Let's try a robust way that should work across more Qt versions
+        intersection_point_top = QPointF()
+        intersect_type_top = line.intersect(top_line, intersection_point_top)
+        if intersect_type_top == QLineF.BoundedIntersection: points.append(QPointF(intersection_point_top)) # Ensure new QPointF
         
         # Bottom edge
-        bottom_line = QLineF(item_rect.bottomLeft(), item_rect.bottomRight())
-        intersect_type = line.intersect(bottom_line, intersection_point)
-        if intersect_type == QLineF.BoundedIntersection: points.append(QPointF(intersection_point))
+        intersection_point_bottom = QPointF()
+        intersect_type_bottom = line.intersect(bottom_line, intersection_point_bottom)
+        if intersect_type_bottom == QLineF.BoundedIntersection: points.append(QPointF(intersection_point_bottom))
 
         # Left edge
-        left_line = QLineF(item_rect.topLeft(), item_rect.bottomLeft())
-        intersect_type = line.intersect(left_line, intersection_point)
-        if intersect_type == QLineF.BoundedIntersection: points.append(QPointF(intersection_point))
+        intersection_point_left = QPointF()
+        intersect_type_left = line.intersect(left_line, intersection_point_left)
+        if intersect_type_left == QLineF.BoundedIntersection: points.append(QPointF(intersection_point_left))
 
         # Right edge
-        right_line = QLineF(item_rect.topRight(), item_rect.bottomRight())
-        intersect_type = line.intersect(right_line, intersection_point)
-        if intersect_type == QLineF.BoundedIntersection: points.append(QPointF(intersection_point))
+        intersection_point_right = QPointF()
+        intersect_type_right = line.intersect(right_line, intersection_point_right)
+        if intersect_type_right == QLineF.BoundedIntersection: points.append(QPointF(intersection_point_right))
 
 
         if not points: return item_rect.center() 
@@ -645,32 +673,37 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         painter.setBrush(Qt.NoBrush)
         painter.drawPath(self.path())
 
+        # Draw arrowhead
         if self.path().elementCount() < 1 : return 
 
         line_end_point = self.path().pointAtPercent(1.0)
         angle_rad = 0
-        if self.path().elementCount() > 0:
-            p_before_end = self.path().pointAtPercent(0.98) # Point slightly before the end
-            # Ensure p_before_end is different from line_end_point to get a valid angle
-            if (line_end_point - p_before_end).manhattanLength() < 0.1: # If too close, use start of path
-                if self.path().elementCount() > 0:
-                    first_element = self.path().elementAt(0)
-                    p_start = QPointF(first_element.x, first_element.y)
-                    angle_rad = math.atan2(line_end_point.y() - p_start.y(), line_end_point.x() - p_start.x())
-                else: # Cannot determine angle
-                    return
-            else:
-                 angle_rad = math.atan2(line_end_point.y() - p_before_end.y(), line_end_point.x() - p_before_end.x())
+        if self.path().elementCount() > 0: # Path has at least a moveTo
+            if self.path().elementCount() > 1 or not self.control_point_offset.isNull() or self.start_item == self.end_item:
+                # For curves or self-loops, use tangent at end
+                p_before_end = self.path().pointAtPercent(0.98)
+                if (line_end_point - p_before_end).manhattanLength() < 0.1 and self.path().elementCount() > 0:
+                     # Fallback if points are too close
+                     first_element = self.path().elementAt(0)
+                     p_start = QPointF(first_element.x, first_element.y)
+                     angle_rad = math.atan2(line_end_point.y() - p_start.y(), line_end_point.x() - p_start.x())
+                else:
+                     angle_rad = math.atan2(line_end_point.y() - p_before_end.y(), line_end_point.x() - p_before_end.x())
+            else: # Straight line
+                 first_element = self.path().elementAt(0)
+                 p_start = QPointF(first_element.x, first_element.y)
+                 angle_rad = math.atan2(line_end_point.y() - p_start.y(), line_end_point.x() - p_start.x())
         else:
             return
 
 
+        # Arrow points "towards" line_end_point along the tangent
         arrow_p1_x = line_end_point.x() - self.arrow_size * math.cos(angle_rad + math.pi / 6)
         arrow_p1_y = line_end_point.y() - self.arrow_size * math.sin(angle_rad + math.pi / 6)
         arrow_p2_x = line_end_point.x() - self.arrow_size * math.cos(angle_rad - math.pi / 6)
         arrow_p2_y = line_end_point.y() - self.arrow_size * math.sin(angle_rad - math.pi / 6)
 
-        painter.setBrush(self.pen().color())
+        painter.setBrush(self.pen().color()) # Arrow same color as line
         painter.drawPolygon(QPolygonF([line_end_point, QPointF(arrow_p1_x, arrow_p1_y), QPointF(arrow_p2_x, arrow_p2_y)]))
 
 
@@ -690,11 +723,14 @@ class GraphicsTransitionItem(QGraphicsPathItem):
                 tangent_angle_at_mid_rad = math.atan2(p_after_mid.y() - p_before_mid.y(), p_after_mid.x() - p_before_mid.x())
 
             offset_dist = 15 
+            # Perpendicular offset: rotate tangent by -90 degrees (pi/2 radians)
+            # Normal vector (dx, dy) = (-sin(theta), cos(theta)) for normal pointing "left" of tangent
             dx = -offset_dist * math.sin(tangent_angle_at_mid_rad)
             dy = offset_dist * math.cos(tangent_angle_at_mid_rad)
 
             text_rect = painter.fontMetrics().boundingRect(self.text_label)
-            text_final_pos = text_pos_on_path + QPointF(dx - text_rect.width()/2, dy + text_rect.height()/4)
+            # Adjust so (dx,dy) is center of text_rect relative to text_pos_on_path
+            text_final_pos = text_pos_on_path + QPointF(dx - text_rect.width()/2, dy + text_rect.height()/4) # Adjusted for better baseline
 
             painter.drawText(text_final_pos, self.text_label)
 
@@ -956,6 +992,7 @@ class DiagramScene(QGraphicsScene):
                  target_item_for_menu = item_at_pos
             
             if target_item_for_menu:
+                # Ensure only the right-clicked item is selected for the context menu action
                 if not target_item_for_menu.isSelected():
                     self.clearSelection()
                     target_item_for_menu.setSelected(True)
@@ -1371,10 +1408,9 @@ class MainWindow(QMainWindow):
         
         self.scene = DiagramScene(self.undo_stack, self)
         self.scene.set_log_function(self.log_message)
-        # This connection is correct for updating the modified state of the window
         self.scene.modifiedStatusChanged.connect(self.setWindowModified) 
-        # This connection updates the title string when the modified state changes
         self.scene.modifiedStatusChanged.connect(self._update_window_title) 
+        self.scene.modifiedStatusChanged.connect(self._update_save_actions_enable_state)
 
 
         self.init_ui()
@@ -1384,9 +1420,9 @@ class MainWindow(QMainWindow):
         self.matlab_connection.simulationFinished.connect(self._handle_matlab_modelgen_or_sim_finished)
         self.matlab_connection.codeGenerationFinished.connect(self._handle_matlab_codegen_finished) 
 
-        # self.setWindowTitle(f"{APP_NAME}") # This initial setWindowTitle is okay, but _update_window_title will refine it
-        self._update_window_title() # Call this to set the initial title correctly with placeholder
-        self.on_new_file(silent=True)  
+        self.setWindowTitle(f"{APP_NAME}")
+        self._update_window_title() 
+        self.on_new_file(silent=True) 
 
     def init_ui(self):
         self.setGeometry(100, 100, 1400, 900)
@@ -1403,55 +1439,33 @@ class MainWindow(QMainWindow):
         self._update_undo_redo_actions_enable_state()
 
     def _create_actions(self):
-        # Helper to safely get QStyle enum values
-        def _safe_get_style_enum(attr_name, fallback_attr_name=None):
-            # Returns the integer value of the enum
-            try:
-                return getattr(QStyle, attr_name)
-            except AttributeError:
-                # Optional: Make warning less intrusive or log it differently
-                # print(f"Debug: QStyle attribute '{attr_name}' not found.") 
-                if fallback_attr_name:
-                    try:
-                        # print(f"Debug: Trying fallback QStyle attribute '{fallback_attr_name}'.")
-                        return getattr(QStyle, fallback_attr_name)
-                    except AttributeError:
-                        # print(f"Debug: Fallback QStyle attribute '{fallback_attr_name}' also not found.")
-                        pass # Suppress further messages if fallback also fails
-                return QStyle.SP_CustomBase 
-
-
         # File
-        self.new_action = QAction(get_standard_icon(_safe_get_style_enum("SP_FileIcon"), "New"), "&New", self, shortcut="Ctrl+N", triggered=self.on_new_file)
-        self.open_action = QAction(get_standard_icon(_safe_get_style_enum("SP_DialogOpenButton"), "Opn"), "&Open...", self, shortcut="Ctrl+O", triggered=self.on_open_file)
-        self.save_action = QAction(get_standard_icon(_safe_get_style_enum("SP_DialogSaveButton"), "Sav"), "&Save", self, shortcut="Ctrl+S", triggered=self.on_save_file)
+        self.new_action = QAction(get_standard_icon(QStyle.SP_FileIcon, "New"), "&New", self, shortcut="Ctrl+N", triggered=self.on_new_file)
+        self.open_action = QAction(get_standard_icon(QStyle.SP_DialogOpenButton, "Opn"), "&Open...", self, shortcut="Ctrl+O", triggered=self.on_open_file)
+        self.save_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "Sav"), "&Save", self, shortcut="Ctrl+S", triggered=self.on_save_file)
         self.save_as_action = QAction("Save &As...", self, shortcut="Ctrl+Shift+S", triggered=self.on_save_file_as)
-        self.exit_action = QAction(get_standard_icon(_safe_get_style_enum("SP_DialogCloseButton"), "Exit"), "E&xit", self, shortcut="Ctrl+Q", triggered=self.close)
+        self.exit_action = QAction(get_standard_icon(QStyle.SP_DialogCloseButton, "Exit"), "E&xit", self, shortcut="Ctrl+Q", triggered=self.close)
 
         # Edit
         self.undo_action = self.undo_stack.createUndoAction(self, "&Undo")
         self.undo_action.setShortcut("Ctrl+Z")
-        self.undo_action.setIcon(get_standard_icon(_safe_get_style_enum("SP_ArrowBack", "SP_ArrowLeft"), "Un"))
+        self.undo_action.setIcon(get_standard_icon(QStyle.SP_ArrowBack, "Un"))
         self.redo_action = self.undo_stack.createRedoAction(self, "&Redo")
         self.redo_action.setShortcut("Ctrl+Y")
-        self.redo_action.setIcon(get_standard_icon(_safe_get_style_enum("SP_ArrowForward", "SP_ArrowRight"), "Re"))
+        self.redo_action.setIcon(get_standard_icon(QStyle.SP_ArrowForward, "Re"))
         
         self.undo_stack.canUndoChanged.connect(self._update_undo_redo_actions_enable_state)
         self.undo_stack.canRedoChanged.connect(self._update_undo_redo_actions_enable_state)
 
-        self.select_all_action = QAction(get_standard_icon(_safe_get_style_enum("SP_FileDialogDetailedView"), "All"), "Select &All", self, shortcut="Ctrl+A", triggered=self.on_select_all)
-        self.delete_action = QAction(get_standard_icon(_safe_get_style_enum("SP_TrashIcon"), "Del"), "&Delete", self, shortcut="Delete", triggered=self.on_delete_selected)
+
+        self.select_all_action = QAction(get_standard_icon(QStyle.SP_FileDialogDetailedView, "All"), "Select &All", self, shortcut="Ctrl+A", triggered=self.on_select_all)
+        self.delete_action = QAction(get_standard_icon(QStyle.SP_TrashIcon, "Del"), "&Delete", self, shortcut="Delete", triggered=self.on_delete_selected)
         
         # Scene Interaction Modes
         self.mode_action_group = QActionGroup(self)
-        
-        select_icon_enum_val = _safe_get_style_enum("SP_ArrowCursor")
-        if select_icon_enum_val == QStyle.SP_CustomBase: # If SP_ArrowCursor was not found and defaulted
-            select_icon_enum_val = _safe_get_style_enum("SP_PointingHandCursor") # Try SP_PointingHandCursor
-
-        self.select_mode_action = QAction(QIcon.fromTheme("edit-select", get_standard_icon(select_icon_enum_val, "Sel")), "Select/Move", self, checkable=True, triggered=lambda: self.scene.set_mode("select"))
-        self.add_state_mode_action = QAction(QIcon.fromTheme("draw-rectangle", get_standard_icon(_safe_get_style_enum("SP_FileDialogNewFolder"), "St")), "Add State", self, checkable=True, triggered=lambda: self.scene.set_mode("state"))
-        self.add_transition_mode_action = QAction(QIcon.fromTheme("draw-connector", get_standard_icon(_safe_get_style_enum("SP_FileDialogBack", "SP_ArrowLeft"), "Tr")), "Add Transition", self, checkable=True, triggered=lambda: self.scene.set_mode("transition"))
+        self.select_mode_action = QAction(QIcon.fromTheme("edit-select", get_standard_icon(QStyle.SP_PointingHandCursor, "Sel")), "Select/Move", self, checkable=True, triggered=lambda: self.scene.set_mode("select")) # Corrected
+        self.add_state_mode_action = QAction(QIcon.fromTheme("draw-rectangle", get_standard_icon(QStyle.SP_FileDialogNewFolder, "St")), "Add State", self, checkable=True, triggered=lambda: self.scene.set_mode("state"))
+        self.add_transition_mode_action = QAction(QIcon.fromTheme("draw-connector", get_standard_icon(QStyle.SP_FileDialogBack, "Tr")), "Add Transition", self, checkable=True, triggered=lambda: self.scene.set_mode("transition"))
         
         self.mode_action_group.addAction(self.select_mode_action)
         self.mode_action_group.addAction(self.add_state_mode_action)
@@ -1459,14 +1473,13 @@ class MainWindow(QMainWindow):
         self.select_mode_action.setChecked(True) 
 
         # Simulation
-        self.export_simulink_action = QAction(QIcon.fromTheme("document-export", get_standard_icon(_safe_get_style_enum("SP_ArrowRight"), "->M")), "&Export to Simulink...", self, triggered=self.on_export_simulink)
-        self.run_simulation_action = QAction(QIcon.fromTheme("media-playback-start", get_standard_icon(_safe_get_style_enum("SP_MediaPlay"), "Run")), "&Run Simulation...", self, triggered=self.on_run_simulation)
-        self.generate_code_action = QAction(QIcon.fromTheme("utilities-terminal", get_standard_icon(_safe_get_style_enum("SP_ComputerIcon"), "Cde")), "Generate &Code (C/C++)...", self, triggered=self.on_generate_code)
-        self.matlab_settings_action = QAction(QIcon.fromTheme("preferences-system", get_standard_icon(_safe_get_style_enum("SP_ComputerIcon", "SP_DesktopIcon"), "Cfg")), "&MATLAB Settings...", self, triggered=self.on_matlab_settings)
+        self.export_simulink_action = QAction(QIcon.fromTheme("document-export", get_standard_icon(QStyle.SP_ArrowRight, "->M")), "&Export to Simulink...", self, triggered=self.on_export_simulink)
+        self.run_simulation_action = QAction(QIcon.fromTheme("media-playback-start", get_standard_icon(QStyle.SP_MediaPlay, "Run")), "&Run Simulation...", self, triggered=self.on_run_simulation)
+        self.generate_code_action = QAction(QIcon.fromTheme("utilities-terminal", get_standard_icon(QStyle.SP_ComputerIcon, "Cde")), "Generate &Code (C/C++)...", self, triggered=self.on_generate_code)
+        self.matlab_settings_action = QAction(QIcon.fromTheme("preferences-system", get_standard_icon(QStyle.SP_ComputerIcon, "Cfg")), "&MATLAB Settings...", self, triggered=self.on_matlab_settings)
 
         # Help
-        self.about_action = QAction(get_standard_icon(_safe_get_style_enum("SP_DialogHelpButton"), "?"), "&About", self, triggered=self.on_about)
-
+        self.about_action = QAction(get_standard_icon(QStyle.SP_DialogHelpButton, "?"), "&About", self, triggered=self.on_about)
 
     def _create_menus(self):
         menu_bar = self.menuBar()
@@ -1600,9 +1613,8 @@ class MainWindow(QMainWindow):
         else:
             title += " - Untitled"
         
-        # This is the crucial part: always include [*] when setting the title string
-        # The self.isWindowModified() call will then determine if the asterisk is shown or hidden.
-        title += "[*]" 
+        if self.isWindowModified(): 
+            title += "[*]"
         self.setWindowTitle(title)
 
     def _update_save_actions_enable_state(self):
@@ -1900,7 +1912,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         if self._prompt_save_if_dirty():
-            for thread in list(self.matlab_connection._active_threads): 
+            for thread in list(self.matlab_connection._active_threads): # Iterate over a copy
                 if thread.isRunning():
                     print(f"Warning: MATLAB thread {thread} still running on exit.")
             event.accept()

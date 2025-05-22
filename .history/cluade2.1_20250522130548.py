@@ -1371,10 +1371,9 @@ class MainWindow(QMainWindow):
         
         self.scene = DiagramScene(self.undo_stack, self)
         self.scene.set_log_function(self.log_message)
-        # This connection is correct for updating the modified state of the window
         self.scene.modifiedStatusChanged.connect(self.setWindowModified) 
-        # This connection updates the title string when the modified state changes
         self.scene.modifiedStatusChanged.connect(self._update_window_title) 
+        self.scene.modifiedStatusChanged.connect(self._update_save_actions_enable_state)
 
 
         self.init_ui()
@@ -1384,9 +1383,9 @@ class MainWindow(QMainWindow):
         self.matlab_connection.simulationFinished.connect(self._handle_matlab_modelgen_or_sim_finished)
         self.matlab_connection.codeGenerationFinished.connect(self._handle_matlab_codegen_finished) 
 
-        # self.setWindowTitle(f"{APP_NAME}") # This initial setWindowTitle is okay, but _update_window_title will refine it
-        self._update_window_title() # Call this to set the initial title correctly with placeholder
-        self.on_new_file(silent=True)  
+        self.setWindowTitle(f"{APP_NAME}")
+        self._update_window_title() 
+        self.on_new_file(silent=True) 
 
     def init_ui(self):
         self.setGeometry(100, 100, 1400, 900)
