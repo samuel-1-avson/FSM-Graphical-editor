@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import (
     QIcon, QBrush, QColor, QFont, QPen, QPixmap, QDrag, QPainter, QPainterPath,
     QTransform, QKeyEvent, QPainterPathStroker, QPolygonF, QKeySequence,
-    QDesktopServices, QWheelEvent, QMouseEvent, QCloseEvent, QFontMetrics, QPalette # <-- Added QPalette
+    QDesktopServices, QWheelEvent, QMouseEvent, QCloseEvent, QFontMetrics
 )
 from PyQt5.QtCore import (
     Qt, QRectF, QPointF, QMimeData, QPoint, QLineF, QObject, pyqtSignal, QThread, QDir,
@@ -2278,14 +2278,12 @@ class ZoomableView(QGraphicsView):
 
 
 # --- Dialogs ---
-# ...existing code...
 class StatePropertiesDialog(QDialog):
     def __init__(self, parent=None, current_properties=None, is_new_state=False):
         super().__init__(parent)
         self.setWindowTitle("State Properties")
-        self.setWindowIcon(get_standard_icon(QStyle.SP_DialogApplyButton, "Props")) # Fixed icon enum
-        self.setMinimumWidth(480)
-# ...existing code...
+        self.setWindowIcon(get_standard_icon(QStyle.SP_Dialog จดิต,"Props")) # SP_FileDialogInfoView or similar might be better
+        self.setMinimumWidth(480) 
 
         layout = QFormLayout(self)
         layout.setSpacing(8); layout.setContentsMargins(12,12,12,12) # More padding

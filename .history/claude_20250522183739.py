@@ -1612,14 +1612,11 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
                 grid_x = round(pos.x() / self.grid_size) * self.grid_size
                 grid_y = round(pos.y() / self.grid_size) * self.grid_size
                 self._add_item_interactive(QPointF(grid_x, grid_y), item_type="Comment")
-           # ...existing code...
             elif self.current_mode == "transition":
                 if isinstance(top_item_at_pos, GraphicsStateItem): self._handle_transition_click(top_item_at_pos, pos)
-                else:
-                    self.transition_start_item = None
-                    if self._temp_transition_line: self.removeItem(self._temp_transition_line); self._temp_transition_line = None
-                    self.log_function("Transition drawing cancelled.")
-# ...existing code...
+                else: self.transition_start_item = None;
+                      if self._temp_transition_line: self.removeItem(self._temp_transition_line); self._temp_transition_line = None
+                      self.log_function("Transition drawing cancelled.")
             else:
                 self._mouse_press_items_positions.clear()
                 for item in [i for i in self.selectedItems() if i.flags() & QGraphicsItem.ItemIsMovable]:

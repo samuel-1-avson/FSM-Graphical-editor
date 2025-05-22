@@ -16,23 +16,26 @@ from PyQt5.QtWidgets import (
     QGroupBox, QUndoStack, QUndoCommand, QStyle, QSizePolicy, QGraphicsLineItem,
     QToolButton, QGraphicsSceneMouseEvent, QGraphicsSceneDragDropEvent,
     QGraphicsSceneHoverEvent, QGraphicsTextItem, QGraphicsDropShadowEffect,
-    QAbstractItemView # Added for QComboBox QSS
+    QAbstractItemView
 )
 from PyQt5.QtGui import (
     QIcon, QBrush, QColor, QFont, QPen, QPixmap, QDrag, QPainter, QPainterPath,
     QTransform, QKeyEvent, QPainterPathStroker, QPolygonF, QKeySequence,
-    QDesktopServices, QWheelEvent, QMouseEvent, QCloseEvent, QFontMetrics, QPalette
+    QDesktopServices, QWheelEvent, QMouseEvent, QCloseEvent, QFontMetrics, QPalette,
+    QImage, QPageSize # Added QImage, QPageSize
 )
 from PyQt5.QtCore import (
     Qt, QRectF, QPointF, QMimeData, QPoint, QLineF, QObject, pyqtSignal, QThread, QDir,
     QEvent, QTimer, QSize, QTime, QUrl,
     QSaveFile, QIODevice
 )
+from PyQt5.QtSvg import QSvgGenerator # Added QSvgGenerator
+from PyQt5.QtPrintSupport import QPrinter # Added QPrinter
 import math
 
 
 # --- Configuration ---
-APP_VERSION = "1.6.1" # GUI Overhaul - Polish Pass
+APP_VERSION = "1.6.2" # Added Diagram Export Feature
 APP_NAME = "Brain State Machine Designer"
 FILE_EXTENSION = ".bsm"
 FILE_FILTER = f"Brain State Machine Files (*{FILE_EXTENSION});;All Files (*)"
@@ -157,7 +160,6 @@ STYLE_SHEET_GLOBAL = f"""
         margin: 1px;
         border: 1px solid transparent;
         border-radius: 4px;
-        /* icon-size will be set by QToolBar.setIconSize() */
     }}
     QToolBar QToolButton:hover {{
         background-color: {COLOR_ACCENT_PRIMARY_LIGHT};
@@ -257,16 +259,9 @@ STYLE_SHEET_GLOBAL = f"""
         border-bottom-right-radius: 3px;
     }}
     QComboBox::down-arrow {{
-        /* Removed explicit image, relying on native style or a general style if needed */
-        /* To create a CSS arrow:
-           border-left: 4px solid transparent;
-           border-right: 4px solid transparent;
-           border-top: 4px solid {COLOR_TEXT_PRIMARY}; // or another color
-           width: 0px; height: 0px;
-           margin: auto; // To center it if drop-down width is larger
-        */
+        /* Removed explicit image, relying on native style */
     }}
-    QComboBox QAbstractItemView {{ /* Style for the dropdown list */
+    QComboBox QAbstractItemView {{
         background-color: {COLOR_BACKGROUND_DIALOG};
         border: 1px solid {COLOR_BORDER_MEDIUM};
         selection-background-color: {COLOR_ACCENT_PRIMARY};
@@ -301,7 +296,7 @@ STYLE_SHEET_GLOBAL = f"""
     }}
     QDialogButtonBox QPushButton[text="OK"],
     QDialogButtonBox QPushButton[text="Apply & Close"],
-    QDialogButtonBox QPushButton[text="Ok"] {{ /* Catch common variations */
+    QDialogButtonBox QPushButton[text="Ok"] {{
         background-color: {COLOR_ACCENT_PRIMARY};
         color: {COLOR_TEXT_ON_ACCENT};
         border-color: #0D47A1;
@@ -413,10 +408,10 @@ STYLE_SHEET_GLOBAL = f"""
         background-color: {COLOR_ACCENT_SECONDARY};
         color: {COLOR_TEXT_ON_ACCENT};
         border: 1px solid #E65100;
-        font-weight: normal; /* Override general QPushButton bold */
-        icon-size: 14px; /* For snippet button icons */
-        padding: 4px 8px; /* Smaller padding for snippet buttons */
-        min-height: 18px; /* More compact */
+        font-weight: normal;
+        icon-size: 14px;
+        padding: 4px 8px;
+        min-height: 18px;
     }}
     QPushButton#SnippetButton:hover {{
         background-color: #FFA000;
@@ -448,11 +443,11 @@ STYLE_SHEET_GLOBAL = f"""
         background-color: #E8EAF6;
         color: {COLOR_TEXT_PRIMARY};
         border: 1px solid #C5CAE9;
-        padding: 8px 10px 8px 10px; /* top R B L - L needs space if icon set */
+        padding: 8px 10px 8px 10px;
         border-radius: 4px;
         text-align: left;
         font-weight: 500;
-        icon-size: 18px; /* Ensure icons in these buttons are sized */
+        icon-size: 18px;
     }}
     QPushButton#DraggableToolButton:hover {{
         background-color: {COLOR_ACCENT_PRIMARY_LIGHT};
@@ -463,18 +458,17 @@ STYLE_SHEET_GLOBAL = f"""
         color: {COLOR_TEXT_ON_ACCENT};
     }}
 
-    #PropertiesDock QLabel {{ /* Used for the rich text display */
+    #PropertiesDock QLabel {{
         padding: 8px;
         background-color: {COLOR_BACKGROUND_DIALOG};
         border: 1px solid {COLOR_BORDER_LIGHT};
         border-radius: 3px;
         line-height: 1.4;
-        /* min-height: 80px; Optional: give it some default space */
     }}
-    #PropertiesDock QPushButton {{ /* Edit Properties button */
+    #PropertiesDock QPushButton {{
         background-color: {COLOR_ACCENT_PRIMARY};
         color: {COLOR_TEXT_ON_ACCENT};
-        icon-size: 16px; /* For Edit Details button icon */
+        icon-size: 16px;
     }}
     #PropertiesDock QPushButton:hover {{
         background-color: #1E88E5;
@@ -485,7 +479,7 @@ STYLE_SHEET_GLOBAL = f"""
         text-align: left;
         icon-size: 18px;
         border-radius: 4px;
-        border: 1px solid transparent; /* Add base border for consistency */
+        border: 1px solid transparent;
     }}
      QDockWidget#ToolsDock QToolButton:hover {{
         background-color: {COLOR_ACCENT_PRIMARY_LIGHT};
@@ -496,8 +490,8 @@ STYLE_SHEET_GLOBAL = f"""
         color: {COLOR_TEXT_ON_ACCENT};
         border: 1px solid #0D47A1;
     }}
-    QDockWidget#ToolsDock QToolButton:pressed {{ /* Added for consistent feedback */
-        background-color: #1565C0; /* Slightly darker blue than checked */
+    QDockWidget#ToolsDock QToolButton:pressed {{
+        background-color: #1565C0;
         color: {COLOR_TEXT_ON_ACCENT};
     }}
 """
@@ -505,25 +499,19 @@ STYLE_SHEET_GLOBAL = f"""
 
 # --- Utility Functions ---
 def get_standard_icon(standard_pixmap_enum_value, fallback_text=None, target_size=QSize(24, 24)):
-    """
-    Tries to get a standard icon. If it fails or the icon is null,
-    it creates a fallback icon with text or a generic symbol.
-    """
     icon = QIcon()
     style = QApplication.style()
     if style:
         try:
             icon = style.standardIcon(standard_pixmap_enum_value)
         except Exception:
-            pass # Icon remains null
+            pass
 
     if icon.isNull():
         pixmap = QPixmap(target_size)
         pixmap.fill(QColor(COLOR_BACKGROUND_MEDIUM))
-
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
-
         border_rect = QRectF(0.5, 0.5, target_size.width() - 1, target_size.height() - 1)
         painter.setPen(QPen(QColor(COLOR_BORDER_MEDIUM), 1))
         painter.drawRoundedRect(border_rect, 3, 3)
@@ -539,18 +527,16 @@ def get_standard_icon(standard_pixmap_enum_value, fallback_text=None, target_siz
             elif len(fallback_text) > 1 and fallback_text[1].islower() and not fallback_text[0].isdigit():
                  display_text = fallback_text[0].upper()
             painter.drawText(pixmap.rect(), Qt.AlignCenter, display_text)
-        else: # Generic placeholder if no text - draw a simple shape
-             painter.setPen(QPen(QColor(COLOR_ACCENT_PRIMARY), max(1, target_size.width() // 12) )) # Scaled pen width
+        else:
+             painter.setPen(QPen(QColor(COLOR_ACCENT_PRIMARY), max(1, target_size.width() // 12) ))
              painter.setBrush(QColor(COLOR_ACCENT_PRIMARY))
              center_pt = pixmap.rect().center()
-             # Draw a small, abstract symbol, e.g., a stylized asterisk or question mark
              radius = min(target_size.width(), target_size.height()) * 0.25
              painter.drawLine(center_pt + QPointF(0, -radius), center_pt + QPointF(0, radius))
              painter.drawLine(center_pt + QPointF(-radius, 0), center_pt + QPointF(radius, 0))
-             if target_size.width() > 16: # Add diagonals for larger icons
+             if target_size.width() > 16:
                 painter.drawLine(center_pt + QPointF(-radius*0.707, -radius*0.707), center_pt + QPointF(radius*0.707, radius*0.707))
                 painter.drawLine(center_pt + QPointF(-radius*0.707, radius*0.707), center_pt + QPointF(radius*0.707, -radius*0.707))
-
         painter.end()
         return QIcon(pixmap)
     return icon
@@ -572,16 +558,15 @@ class MatlabConnection(QObject):
         self.matlab_path = path.strip()
         if self.matlab_path and os.path.exists(self.matlab_path) and \
            (os.access(self.matlab_path, os.X_OK) or self.matlab_path.lower().endswith('.exe')):
-            self.connected = True # Tentatively true, test_connection confirms
             self.connectionStatusChanged.emit(True, f"MATLAB path set and appears valid: {self.matlab_path}")
             return True
         else:
             old_path = self.matlab_path
             self.connected = False
             self.matlab_path = ""
-            if old_path: # Only emit error if a path was actually set and failed
+            if old_path:
                 self.connectionStatusChanged.emit(False, f"MATLAB path '{old_path}' is invalid or not executable.")
-            else: # Path was cleared or never set
+            else:
                 self.connectionStatusChanged.emit(False, "MATLAB path cleared or not set.")
             return False
 
@@ -590,17 +575,15 @@ class MatlabConnection(QObject):
             self.connected = False
             self.connectionStatusChanged.emit(False, "MATLAB path not set. Cannot test connection.")
             return False
-        # If set_matlab_path already validated it, we can proceed.
-        # If connected is False but path is set, it implies set_matlab_path might not have run or failed silently.
-        # Let's ensure `self.connected` reflects at least basic path validity before heavier test.
-        if not self.connected and self.matlab_path:
-             if not self.set_matlab_path(self.matlab_path): # Re-validate path (emits signal)
-                  return False # set_matlab_path would have emitted a failure.
-
+        if not (os.path.exists(self.matlab_path) and \
+                (os.access(self.matlab_path, os.X_OK) or self.matlab_path.lower().endswith('.exe'))):
+            self.connected = False
+            self.connectionStatusChanged.emit(False, f"MATLAB path '{self.matlab_path}' is invalid or not executable for test.")
+            return False
         try:
             cmd = [self.matlab_path, "-nodisplay", "-nosplash", "-nodesktop", "-batch", "disp('MATLAB_CONNECTION_TEST_SUCCESS')"]
             process = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=20, check=False, # check=False to handle non-zero exit codes ourselves
+                cmd, capture_output=True, text=True, timeout=20, check=False,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
             if process.returncode == 0 and "MATLAB_CONNECTION_TEST_SUCCESS" in process.stdout:
@@ -617,7 +600,7 @@ class MatlabConnection(QObject):
             self.connected = False
             self.connectionStatusChanged.emit(False, "MATLAB connection test timed out (20s).")
             return False
-        except FileNotFoundError: # Should be caught by set_matlab_path ideally
+        except FileNotFoundError:
             self.connected = False
             self.connectionStatusChanged.emit(False, f"MATLAB executable not found at: {self.matlab_path}")
             return False
@@ -630,91 +613,68 @@ class MatlabConnection(QObject):
         paths_to_check = []
         if sys.platform == 'win32':
             program_files = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
-            program_files_x86 = os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)') # For 32-bit MATLAB on 64-bit OS
-            matlab_bases = [os.path.join(program_files, 'MATLAB'),
-                            os.path.join(program_files_x86, 'MATLAB')]
+            program_files_x86 = os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)')
+            matlab_bases = [os.path.join(program_files, 'MATLAB'), os.path.join(program_files_x86, 'MATLAB')]
             for matlab_base in matlab_bases:
                 if os.path.isdir(matlab_base):
                     versions = sorted([d for d in os.listdir(matlab_base) if d.startswith('R20')], reverse=True)
                     for v_year_letter in versions:
                         paths_to_check.append(os.path.join(matlab_base, v_year_letter, 'bin', 'matlab.exe'))
-            paths_to_check.append('matlab.exe') # Check if 'matlab.exe' is in PATH
-            paths_to_check.append('matlab')     # Check if 'matlab' (without .exe) is in PATH (less common for .exe)
+            paths_to_check.append('matlab.exe'); paths_to_check.append('matlab')
         elif sys.platform == 'darwin':
             base_app_path = '/Applications'
             potential_matlab_apps = sorted([d for d in os.listdir(base_app_path) if d.startswith('MATLAB_R20') and d.endswith('.app')], reverse=True)
-            for app_name in potential_matlab_apps:
-                 paths_to_check.append(os.path.join(base_app_path, app_name, 'bin', 'matlab'))
+            for app_name in potential_matlab_apps: paths_to_check.append(os.path.join(base_app_path, app_name, 'bin', 'matlab'))
             paths_to_check.append('matlab')
         else: # Linux / other Unix
             common_base_paths = ['/usr/local/MATLAB', '/opt/MATLAB']
             for base_path in common_base_paths:
                 if os.path.isdir(base_path):
                     versions = sorted([d for d in os.listdir(base_path) if d.startswith('R20')], reverse=True)
-                    for v_year_letter in versions:
-                         paths_to_check.append(os.path.join(base_path, v_year_letter, 'bin', 'matlab'))
+                    for v_year_letter in versions: paths_to_check.append(os.path.join(base_path, v_year_letter, 'bin', 'matlab'))
             paths_to_check.append('matlab')
 
         for path_candidate in paths_to_check:
             is_path_command = path_candidate.lower() == 'matlab' or path_candidate.lower() == 'matlab.exe'
             if is_path_command:
                 try:
-                    # Test by running a simple command that exits
                     test_process = subprocess.run([path_candidate, "-batch", "exit"], timeout=5, capture_output=True,
                                                   creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
                     if test_process.returncode == 0:
-                        if self.set_matlab_path(path_candidate): # Validates and sets internal path
-                           self.connectionStatusChanged.emit(True, f"MATLAB detected in PATH: {path_candidate}")
-                           return True
-                except (FileNotFoundError, subprocess.TimeoutExpired, OSError): # Catch OSError for permissions etc.
-                    continue # Try next candidate
+                        if self.set_matlab_path(path_candidate):
+                           self.test_connection()
+                           if self.connected: return True
+                except (FileNotFoundError, subprocess.TimeoutExpired, OSError): continue
             elif os.path.exists(path_candidate) and (os.access(path_candidate, os.X_OK) or path_candidate.lower().endswith('.exe')):
                 if self.set_matlab_path(path_candidate):
-                    self.connectionStatusChanged.emit(True, f"MATLAB detected at: {path_candidate}")
-                    return True
-
+                    self.test_connection()
+                    if self.connected: return True
         self.connectionStatusChanged.emit(False, "MATLAB auto-detection failed. Please set the path manually.")
         return False
 
     def _run_matlab_script(self, script_content, worker_signal, success_message_prefix):
-        if not self.connected: # Check self.connected which should be updated by set_matlab_path/test_connection
+        if not self.connected:
             worker_signal.emit(False, "MATLAB not connected or path invalid.", "")
             return
-
         try:
-            # Create a temporary directory for MATLAB scripts
             temp_dir = tempfile.mkdtemp(prefix="bsm_matlab_")
             script_file = os.path.join(temp_dir, "matlab_script.m")
-            with open(script_file, 'w', encoding='utf-8') as f: # Ensure UTF-8 for script content
-                f.write(script_content)
+            with open(script_file, 'w', encoding='utf-8') as f: f.write(script_content)
         except Exception as e:
             worker_signal.emit(False, f"Failed to create temporary MATLAB script: {e}", "")
             return
-
         worker = MatlabCommandWorker(self.matlab_path, script_file, worker_signal, success_message_prefix)
-        thread = QThread()
-        worker.moveToThread(thread)
-
-        # Connections for thread management
+        thread = QThread(); worker.moveToThread(thread)
         thread.started.connect(worker.run_command)
-        worker.finished_signal.connect(thread.quit)
-        worker.finished_signal.connect(worker.deleteLater) # Clean up worker
-        thread.finished.connect(thread.deleteLater)      # Clean up thread
-
-        # Track active threads to prevent Python from exiting if MATLAB is still running
-        self._active_threads.append(thread)
+        worker.finished_signal.connect(thread.quit); worker.finished_signal.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater); self._active_threads.append(thread)
         thread.finished.connect(lambda t=thread: self._active_threads.remove(t) if t in self._active_threads else None)
-
         thread.start()
 
     def generate_simulink_model(self, states, transitions, output_dir, model_name="BrainStateMachine"):
-        if not self.connected:
-            self.simulationFinished.emit(False, "MATLAB not connected.", "") # Using simulationFinished for this too
-            return False
-
+        if not self.connected: self.simulationFinished.emit(False, "MATLAB not connected.", ""); return False
         slx_file_path = os.path.join(output_dir, f"{model_name}.slx").replace('\\', '/')
-        model_name_orig = model_name # For use in strings
-
+        model_name_orig = model_name
         script_lines = [
             f"% Auto-generated Simulink model script for '{model_name_orig}'",
             f"disp('Starting Simulink model generation for {model_name_orig}...');",
@@ -723,83 +683,57 @@ class MatlabConnection(QObject):
             "try",
             "    if bdIsLoaded(modelNameVar), close_system(modelNameVar, 0); end",
             "    if exist(outputModelPath, 'file'), delete(outputModelPath); end",
-
             "    hModel = new_system(modelNameVar);",
             "    open_system(hModel);",
-
             "    disp('Adding Stateflow chart...');",
             "    machine = sfroot.find('-isa', 'Stateflow.Machine', 'Name', modelNameVar);",
             "    if isempty(machine)",
             "        error('Stateflow machine for model ''%s'' not found after new_system.', modelNameVar);",
             "    end",
-
             "    chartSFObj = Stateflow.Chart(machine);",
             "    chartSFObj.Name = 'BrainStateMachineLogic';",
-
             "    chartBlockSimulinkPath = [modelNameVar, '/', 'BSM_Chart'];",
             "    add_block('stateflow/Chart', chartBlockSimulinkPath, 'Chart', chartSFObj.Path);",
-            "    set_param(chartBlockSimulinkPath, 'Position', [100 50 400 350]);", # Set chart block size/pos
+            "    set_param(chartBlockSimulinkPath, 'Position', [100 50 400 350]);",
             "    disp(['Stateflow chart block added at: ', chartBlockSimulinkPath]);",
-
             "    stateHandles = containers.Map('KeyType','char','ValueType','any');",
             "% --- State Creation ---"
         ]
-
         for i, state in enumerate(states):
-            s_name_matlab = state['name'].replace("'", "''") # Escape single quotes for MATLAB strings
-            # Create a MATLAB-safe variable name for the state handle
+            s_name_matlab = state['name'].replace("'", "''")
             s_id_matlab_safe = f"state_{i}_{state['name'].replace(' ', '_').replace('-', '_')}"
-            s_id_matlab_safe = ''.join(filter(str.isalnum, s_id_matlab_safe)) # Keep only alphanumeric
-            if not s_id_matlab_safe or not s_id_matlab_safe[0].isalpha(): s_id_matlab_safe = 's_' + s_id_matlab_safe # Ensure starts with letter
-
+            s_id_matlab_safe = ''.join(filter(str.isalnum, s_id_matlab_safe))
+            if not s_id_matlab_safe or not s_id_matlab_safe[0].isalpha(): s_id_matlab_safe = 's_' + s_id_matlab_safe
             state_label_parts = []
-            if state.get('entry_action'):
-                state_label_parts.append(f"entry: {state['entry_action'].replace(chr(10), '; ')}") # Newlines to semicolons
-            if state.get('during_action'):
-                state_label_parts.append(f"during: {state['during_action'].replace(chr(10), '; ')}")
-            if state.get('exit_action'):
-                state_label_parts.append(f"exit: {state['exit_action'].replace(chr(10), '; ')}")
-            s_label_string = "\\n".join(state_label_parts) if state_label_parts else "" # Stateflow uses \n for newlines in labels
-            s_label_string_matlab = s_label_string.replace("'", "''") # Escape single quotes
-
-            # Use relative positioning for SF States within Chart (often better)
-            sf_x = state['x'] / 2.5 + 20  # Scaled position within the chart
-            sf_y = state['y'] / 2.5 + 20
-            sf_w = max(60, state['width'] / 2.5) # Ensure min width/height
-            sf_h = max(40, state['height'] / 2.5)
-
+            if state.get('entry_action'): state_label_parts.append(f"entry: {state['entry_action'].replace(chr(10), '; ')}")
+            if state.get('during_action'): state_label_parts.append(f"during: {state['during_action'].replace(chr(10), '; ')}")
+            if state.get('exit_action'): state_label_parts.append(f"exit: {state['exit_action'].replace(chr(10), '; ')}")
+            s_label_string = "\\n".join(state_label_parts) if state_label_parts else ""
+            s_label_string_matlab = s_label_string.replace("'", "''")
+            sf_x = state['x'] / 2.5 + 20; sf_y = state['y'] / 2.5 + 20
+            sf_w = max(60, state['width'] / 2.5); sf_h = max(40, state['height'] / 2.5)
             script_lines.extend([
                 f"{s_id_matlab_safe} = Stateflow.State(chartSFObj);",
                 f"{s_id_matlab_safe}.Name = '{s_name_matlab}';",
-                f"{s_id_matlab_safe}.Position = [{sf_x}, {sf_y}, {sf_w}, {sf_h}];", # Scaled
+                f"{s_id_matlab_safe}.Position = [{sf_x}, {sf_y}, {sf_w}, {sf_h}];",
                 f"if ~isempty('{s_label_string_matlab}'), {s_id_matlab_safe}.LabelString = sprintf('{s_label_string_matlab}'); end",
                 f"stateHandles('{s_name_matlab}') = {s_id_matlab_safe};"
             ])
             if state.get('is_initial', False):
                 script_lines.append(f"defaultTransition_{i} = Stateflow.Transition(chartSFObj);")
                 script_lines.append(f"defaultTransition_{i}.Destination = {s_id_matlab_safe};")
-                 # Position the default transition arrow. Heuristics:
-                script_lines.append(f"srcPos = [{sf_x-20} {sf_y + sf_h/2}];") # Left of state
+                script_lines.append(f"srcPos = [{sf_x-20} {sf_y + sf_h/2}];")
                 script_lines.append(f"dstPos = [{sf_x} {sf_y + sf_h/2}];")
-                # script_lines.append(f"defaultTransition_{i}.SourceOClock = 0;") # Auto
-                # script_lines.append(f"defaultTransition_{i}.DestinationOClock = 0;") # Auto
-                # Better control for default transitions might require explicit SourcePosition/Midpoint/DestinationPosition.
-                # For simplicity, letting Stateflow auto-route the arrow part often works.
-                # If needed, adjust DestinationOClock or SourceOClock for better appearance if auto is not good.
-                # E.g., defaultTransition_0.DestinationOClock = 9; % Enters state from West (left)
-
         script_lines.append("% --- Transition Creation ---")
         for i, trans in enumerate(transitions):
             src_name_matlab = trans['source'].replace("'", "''")
             dst_name_matlab = trans['target'].replace("'", "''")
-
             label_parts = []
             if trans.get('event'): label_parts.append(trans['event'])
             if trans.get('condition'): label_parts.append(f"[{trans['condition']}]")
-            if trans.get('action'): label_parts.append(f"/{{{trans['action']}}}") # Stateflow syntax for transition action
+            if trans.get('action'): label_parts.append(f"/{{{trans['action']}}}")
             t_label = " ".join(label_parts).strip()
             t_label_matlab = t_label.replace("'", "''")
-
             script_lines.extend([
                 f"if isKey(stateHandles, '{src_name_matlab}') && isKey(stateHandles, '{dst_name_matlab}')",
                 f"    srcStateHandle = stateHandles('{src_name_matlab}');",
@@ -810,340 +744,193 @@ class MatlabConnection(QObject):
             ])
             if t_label_matlab:
                 script_lines.append(f"    t{i}.LabelString = '{t_label_matlab}';")
-            script_lines.append("else")
-            script_lines.append(f"    disp(['Warning: Could not create SF transition from ''{src_name_matlab}'' to ''{dst_name_matlab}''. State missing.']);")
-            script_lines.append("end")
-
+            script_lines.extend(["else", f"    disp(['Warning: Could not create SF transition from ''{src_name_matlab}'' to ''{dst_name_matlab}''. State missing.']);", "end"])
         script_lines.extend([
             "% --- Finalize and Save ---",
-            "    Simulink.BlockDiagram.arrangeSystem(chartBlockSimulinkPath, 'FullLayout', 'true', 'Animation', 'false');", # Auto-arrange chart contents
-            "    sf('FitToView', chartSFObj.Id);", # Fit Stateflow chart to view
+            "    Simulink.BlockDiagram.arrangeSystem(chartBlockSimulinkPath, 'FullLayout', 'true', 'Animation', 'false');",
+            "    sf('FitToView', chartSFObj.Id);",
             "    disp(['Attempting to save Simulink model to: ', outputModelPath]);",
             "    save_system(modelNameVar, outputModelPath, 'OverwriteIfChangedOnDisk', true);",
-            "    close_system(modelNameVar, 0);", # Close without saving again
+            "    close_system(modelNameVar, 0);",
             "    disp(['Simulink model saved successfully to: ', outputModelPath]);",
-            "    fprintf('MATLAB_SCRIPT_SUCCESS:%s\\n', outputModelPath);", # Signal success with path
+            "    fprintf('MATLAB_SCRIPT_SUCCESS:%s\\n', outputModelPath);",
             "catch e",
             "    disp('ERROR during Simulink model generation:');",
             "    disp(getReport(e, 'extended', 'hyperlinks', 'off'));",
-            "    if bdIsLoaded(modelNameVar), close_system(modelNameVar, 0); end", # Clean up if error
-            "    fprintf('MATLAB_SCRIPT_FAILURE:%s\\n', strrep(getReport(e, 'basic'), '\\n', ' '));", # Signal failure
+            "    if bdIsLoaded(modelNameVar), close_system(modelNameVar, 0); end",
+            "    fprintf('MATLAB_SCRIPT_FAILURE:%s\\n', strrep(getReport(e, 'basic'), '\\n', ' '));",
             "end"
         ])
-
-        script_content = "\n".join(script_lines)
-        self._run_matlab_script(script_content, self.simulationFinished, "Model generation")
-        return True
+        self._run_matlab_script("\n".join(script_lines), self.simulationFinished, "Model generation"); return True
 
     def run_simulation(self, model_path, sim_time=10):
-        if not self.connected:
-            self.simulationFinished.emit(False, "MATLAB not connected.", "")
-            return False
-        if not os.path.exists(model_path):
-            self.simulationFinished.emit(False, f"Model file not found: {model_path}", "")
-            return False
-
-        model_path_matlab = model_path.replace('\\', '/')
-        model_dir_matlab = os.path.dirname(model_path_matlab)
+        if not self.connected: self.simulationFinished.emit(False, "MATLAB not connected.", ""); return False
+        if not os.path.exists(model_path): self.simulationFinished.emit(False, f"Model file not found: {model_path}", ""); return False
+        model_path_matlab = model_path.replace('\\', '/'); model_dir_matlab = os.path.dirname(model_path_matlab)
         model_name = os.path.splitext(os.path.basename(model_path))[0]
-
-        script_content = f"""
-        disp('Starting Simulink simulation...');
-        modelPath = '{model_path_matlab}';
-        modelName = '{model_name}';
-        modelDir = '{model_dir_matlab}';
-        currentSimTime = {sim_time};
-
-        try
-            prevPath = path;
-            addpath(modelDir); % Add model's directory to MATLAB path
-            disp(['Added to MATLAB path: ', modelDir]);
-
-            load_system(modelPath); % Load the model
-            disp(['Simulating model: ', modelName, ' for ', num2str(currentSimTime), ' seconds.']);
-
-            % --- Simulation Configuration (Optional - Add more as needed) ---
-            % set_param(modelName, 'SolverType', 'Fixed-step'); % Example: Set solver
-            % set_param(modelName, 'FixedStep', 'auto');    % Example: Fixed step size
-
-            simOut = sim(modelName, 'StopTime', num2str(currentSimTime));
-
-            disp('Simulink simulation completed successfully.');
-            % Consider what data from simOut might be useful to report back if any
-            % For now, just a success message.
-            fprintf('MATLAB_SCRIPT_SUCCESS:Simulation of ''%s'' finished at t=%s. Results in MATLAB workspace (simOut).\\n', modelName, num2str(currentSimTime));
-        catch e
-            disp('ERROR during Simulink simulation:');
-            disp(getReport(e, 'extended', 'hyperlinks', 'off'));
-            fprintf('MATLAB_SCRIPT_FAILURE:%s\\n', strrep(getReport(e, 'basic'),'\\n',' '));
-        end
-        if bdIsLoaded(modelName), close_system(modelName, 0); end % Close model (0 means no save)
-        path(prevPath); % Restore original MATLAB path
-        disp(['Restored MATLAB path. Removed: ', modelDir]);
-        """
-        self._run_matlab_script(script_content, self.simulationFinished, "Simulation")
-        return True
+        script_content = (
+            f"disp('Starting Simulink simulation...');\n"
+            f"modelPath = '{model_path_matlab}';\n"
+            f"modelName = '{model_name}';\n"
+            f"modelDir = '{model_dir_matlab}';\n"
+            f"currentSimTime = {sim_time};\n"
+            "try\n"
+            "    prevPath = path;\n"
+            "    addpath(modelDir);\n"
+            "    disp(['Added to MATLAB path: ', modelDir]);\n"
+            "    load_system(modelPath);\n"
+            "    disp(['Simulating model: ', modelName, ' for ', num2str(currentSimTime), ' seconds.']);\n"
+            "    simOut = sim(modelName, 'StopTime', num2str(currentSimTime));\n"
+            "    disp('Simulink simulation completed successfully.');\n"
+            "    fprintf('MATLAB_SCRIPT_SUCCESS:Simulation of ''%s'' finished at t=%s. Results in MATLAB workspace (simOut).\\n', modelName, num2str(currentSimTime));\n"
+            "catch e\n"
+            "    disp('ERROR during Simulink simulation:');\n"
+            "    disp(getReport(e, 'extended', 'hyperlinks', 'off'));\n"
+            "    fprintf('MATLAB_SCRIPT_FAILURE:%s\\n', strrep(getReport(e, 'basic'),'\\n',' '));\n"
+            "end\n"
+            "if bdIsLoaded(modelName), close_system(modelName, 0); end\n"
+            "path(prevPath);\n"
+            "disp(['Restored MATLAB path. Removed: ', modelDir]);\n"
+        )
+        self._run_matlab_script(script_content, self.simulationFinished, "Simulation"); return True
 
     def generate_code(self, model_path, language="C++", output_dir_base=None):
-        if not self.connected:
-            self.codeGenerationFinished.emit(False, "MATLAB not connected", "")
-            return False
-
-        model_path_matlab = model_path.replace('\\', '/')
-        model_dir_matlab = os.path.dirname(model_path_matlab)
+        if not self.connected: self.codeGenerationFinished.emit(False, "MATLAB not connected", ""); return False
+        model_path_matlab = model_path.replace('\\', '/'); model_dir_matlab = os.path.dirname(model_path_matlab)
         model_name = os.path.splitext(os.path.basename(model_path))[0]
-
-        # Default output directory for code is a subfolder within the model's directory
-        if not output_dir_base: output_dir_base = os.path.dirname(model_path) # Use model's dir as base
+        if not output_dir_base: output_dir_base = os.path.dirname(model_path)
         code_gen_root_matlab = output_dir_base.replace('\\', '/')
-
-
-        script_content = f"""
-        disp('Starting Simulink code generation...');
-        modelPath = '{model_path_matlab}';
-        modelName = '{model_name}';
-        codeGenBaseDir = '{code_gen_root_matlab}'; % Base for codegen folder (e.g., where ModelName_ert_rtw will be created)
-        modelDir = '{model_dir_matlab}';
-
-        try
-            prevPath = path; addpath(modelDir);
-            disp(['Added to MATLAB path: ', modelDir]);
-
-            load_system(modelPath);
-
-            % Check for necessary licenses
-            if ~(license('test', 'MATLAB_Coder') && license('test', 'Simulink_Coder') && license('test', 'Embedded_Coder'))
-                error('Required licenses (MATLAB Coder, Simulink Coder, Embedded Coder) are not available.');
-            end
-
-            % Configure for Embedded Coder (ert.tlc)
-            set_param(modelName,'SystemTargetFile','ert.tlc'); % Generic Real-Time Target
-            set_param(modelName,'GenerateMakefile','on'); % Or 'off' if not needed
-
-            % Configure target language
-            cfg = getActiveConfigSet(modelName);
-            if strcmpi('{language}', 'C++')
-                set_param(cfg, 'TargetLang', 'C++');
-                set_param(cfg.getComponent('Code Generation').getComponent('Interface'), 'CodeInterfacePackaging', 'C++ class'); % Generate C++ class
-                set_param(cfg.getComponent('Code Generation'),'TargetLangStandard', 'C++11 (ISO)'); % Or C++03, C++14, C++17
-                disp('Configured for C++ (class interface, C++11).');
-            else % C
-                set_param(cfg, 'TargetLang', 'C');
-                set_param(cfg.getComponent('Code Generation').getComponent('Interface'), 'CodeInterfacePackaging', 'Reusable function'); % Or 'Nonreusable function'
-                disp('Configured for C (reusable function).');
-            end
-
-            % Other common code generation settings
-            set_param(cfg, 'GenerateReport', 'on'); % Generate HTML report
-            set_param(cfg, 'GenCodeOnly', 'on'); % Only generate code, do not compile/build
-            set_param(cfg, 'RTWVerbose', 'on'); % Verbose output during codegen
-
-            % Define output directory structure (Simulink Coder usually creates a subfolder)
-            % Example: .../codeGenBaseDir/modelName_ert_rtw/
-            if ~exist(codeGenBaseDir, 'dir'), mkdir(codeGenBaseDir); disp(['Created base codegen dir: ', codeGenBaseDir]); end
-
-            disp(['Code generation output base set to: ', codeGenBaseDir]);
-            rtwbuild(modelName, 'CodeGenFolder', codeGenBaseDir, 'GenCodeOnly', true); % Execute code generation
-            disp('Code generation command (rtwbuild) executed.');
-
-            % Determine the actual output directory (often modelName_ert_rtw)
-            actualCodeDir = fullfile(codeGenBaseDir, [modelName '_ert_rtw']); % Common pattern
-            if ~exist(actualCodeDir, 'dir')
-                disp(['Warning: Standard codegen subdir ''', actualCodeDir, ''' not found. Output may be directly in base dir.']);
-                actualCodeDir = codeGenBaseDir; % Fallback if subdir pattern doesn't match
-            end
-
-            disp(['Simulink code generation successful. Code and report expected in/under: ', actualCodeDir]);
-            fprintf('MATLAB_SCRIPT_SUCCESS:%s\\n', actualCodeDir); % Return the actual dir
-        catch e
-            disp('ERROR during Simulink code generation:');
-            disp(getReport(e, 'extended', 'hyperlinks', 'off'));
-            fprintf('MATLAB_SCRIPT_FAILURE:%s\\n', strrep(getReport(e, 'basic'),'\\n',' '));
-        end
-        if bdIsLoaded(modelName), close_system(modelName, 0); end
-        path(prevPath);  disp(['Restored MATLAB path. Removed: ', modelDir]);
-        """
-        self._run_matlab_script(script_content, self.codeGenerationFinished, "Code generation")
-        return True
+        script_content = (
+            f"disp('Starting Simulink code generation...');\n"
+            f"modelPath = '{model_path_matlab}';\n"
+            f"modelName = '{model_name}';\n"
+            f"codeGenBaseDir = '{code_gen_root_matlab}';\n"
+            f"modelDir = '{model_dir_matlab}';\n"
+            "try\n"
+            "    prevPath = path; addpath(modelDir);\n"
+            "    disp(['Added to MATLAB path: ', modelDir]);\n"
+            "    load_system(modelPath);\n"
+            "    if ~(license('test', 'MATLAB_Coder') && license('test', 'Simulink_Coder') && license('test', 'Embedded_Coder'))\n"
+            "        error('Required licenses (MATLAB Coder, Simulink Coder, Embedded Coder) are not available.');\n"
+            "    end\n"
+            "    set_param(modelName,'SystemTargetFile','ert.tlc');\n"
+            "    set_param(modelName,'GenerateMakefile','on');\n"
+            "    cfg = getActiveConfigSet(modelName);\n"
+            "    if strcmpi('{language}', 'C++')\n"
+            "        set_param(cfg, 'TargetLang', 'C++');\n"
+            "        set_param(cfg.getComponent('Code Generation').getComponent('Interface'), 'CodeInterfacePackaging', 'C++ class');\n"
+            "        set_param(cfg.getComponent('Code Generation'),'TargetLangStandard', 'C++11 (ISO)');\n"
+            "        disp('Configured for C++ (class interface, C++11).');\n"
+            "    else\n"
+            "        set_param(cfg, 'TargetLang', 'C');\n"
+            "        set_param(cfg.getComponent('Code Generation').getComponent('Interface'), 'CodeInterfacePackaging', 'Reusable function');\n"
+            "        disp('Configured for C (reusable function).');\n"
+            "    end\n"
+            "    set_param(cfg, 'GenerateReport', 'on');\n"
+            "    set_param(cfg, 'GenCodeOnly', 'on');\n"
+            "    set_param(cfg, 'RTWVerbose', 'on');\n"
+            "    if ~exist(codeGenBaseDir, 'dir'), mkdir(codeGenBaseDir); disp(['Created base codegen dir: ', codeGenBaseDir]); end\n"
+            "    disp(['Code generation output base set to: ', codeGenBaseDir]);\n"
+            "    rtwbuild(modelName, 'CodeGenFolder', codeGenBaseDir, 'GenCodeOnly', true);\n"
+            "    disp('Code generation command (rtwbuild) executed.');\n"
+            "    actualCodeDir = fullfile(codeGenBaseDir, [modelName '_ert_rtw']);\n"
+            "    if ~exist(actualCodeDir, 'dir')\n"
+            "        disp(['Warning: Standard codegen subdir ''', actualCodeDir, ''' not found.']);\n"
+            "        actualCodeDir = codeGenBaseDir;\n"
+            "    end\n"
+            "    disp(['Simulink code generation successful. Code/report in/under: ', actualCodeDir]);\n"
+            "    fprintf('MATLAB_SCRIPT_SUCCESS:%s\\n', actualCodeDir);\n"
+            "catch e\n"
+            "    disp('ERROR during Simulink code generation:');\n"
+            "    disp(getReport(e, 'extended', 'hyperlinks', 'off'));\n"
+            "    fprintf('MATLAB_SCRIPT_FAILURE:%s\\n', strrep(getReport(e, 'basic'),'\\n',' '));\n"
+            "end\n"
+            "if bdIsLoaded(modelName), close_system(modelName, 0); end\n"
+            "path(prevPath);\n"
+            "disp(['Restored MATLAB path. Removed: ', modelDir]);\n"
+        )
+        self._run_matlab_script(script_content, self.codeGenerationFinished, "Code generation"); return True
 
 class MatlabCommandWorker(QObject):
-    finished_signal = pyqtSignal(bool, str, str) # success, message, data_for_signal
-
+    finished_signal = pyqtSignal(bool, str, str)
     def __init__(self, matlab_path, script_file, original_signal, success_message_prefix):
-        super().__init__()
-        self.matlab_path = matlab_path
-        self.script_file = script_file
-        self.original_signal = original_signal
-        self.success_message_prefix = success_message_prefix
-
+        super().__init__(); self.matlab_path = matlab_path; self.script_file = script_file
+        self.original_signal = original_signal; self.success_message_prefix = success_message_prefix
     def run_command(self):
-        output_data_for_signal = ""
-        success = False
-        message = ""
+        output_data = ""; success = False; message = ""
         try:
-            # Ensure the script path is correctly formatted for MATLAB's run command
-            matlab_run_command = f"run('{self.script_file.replace('\\', '/')}')" # Use forward slashes
-            cmd = [self.matlab_path, "-nodisplay", "-nosplash", "-nodesktop", "-batch", matlab_run_command]
-
-            timeout_seconds = 600 # 10 minutes, adjust as needed
-            process = subprocess.run(
-                cmd, capture_output=True, text=True, encoding='utf-8', # Use utf-8 for MATLAB output
-                timeout=timeout_seconds, check=False, # check=False to handle non-zero exit codes ourselves
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-            )
-
-            stdout_str = process.stdout if process.stdout else ""
-            stderr_str = process.stderr if process.stderr else ""
-
-            # Check for custom failure marker first (more reliable than just exit code)
-            if "MATLAB_SCRIPT_FAILURE:" in stdout_str:
+            run_cmd_str = f"run('{self.script_file.replace('\\', '/')}')"
+            cmd = [self.matlab_path, "-nodisplay", "-nosplash", "-nodesktop", "-batch", run_cmd_str]
+            timeout_s = 600
+            proc = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', timeout=timeout_s, check=False,
+                                  creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+            stdout = proc.stdout or ""; stderr = proc.stderr or ""
+            if "MATLAB_SCRIPT_FAILURE:" in stdout:
                 success = False
-                for line in stdout_str.splitlines():
-                    if line.startswith("MATLAB_SCRIPT_FAILURE:"):
-                        error_detail = line.split(":", 1)[1].strip()
-                        message = f"{self.success_message_prefix} script reported failure: {error_detail}"
-                        break
-                if not message: # Fallback if parsing fails
-                    message = f"{self.success_message_prefix} script indicated failure. Full stdout:\n{stdout_str[:500]}"
-                if stderr_str: message += f"\nStderr:\n{stderr_str[:300]}" # Append stderr if present
-
-            elif process.returncode == 0: # MATLAB exited cleanly
-                if "MATLAB_SCRIPT_SUCCESS:" in stdout_str:
+                for line in stdout.splitlines():
+                    if line.startswith("MATLAB_SCRIPT_FAILURE:"): message = f"{self.success_message_prefix} script failure: {line.split(':', 1)[1].strip()}"; break
+                if not message: message = f"{self.success_message_prefix} script failure. Stdout: {stdout[:500]}"
+                if stderr: message += f"\nStderr: {stderr[:300]}"
+            elif proc.returncode == 0:
+                if "MATLAB_SCRIPT_SUCCESS:" in stdout:
                     success = True
-                    for line in stdout_str.splitlines():
-                        if line.startswith("MATLAB_SCRIPT_SUCCESS:"):
-                            output_data_for_signal = line.split(":", 1)[1].strip() # Extract data after marker
-                            break
+                    for line in stdout.splitlines():
+                        if line.startswith("MATLAB_SCRIPT_SUCCESS:"): output_data = line.split(":", 1)[1].strip(); break
                     message = f"{self.success_message_prefix} completed successfully."
-                    # Append data to message only if it's not a simulation (simulation has its own specific message format)
-                    if output_data_for_signal and self.success_message_prefix != "Simulation":
-                         message += f" Data: {output_data_for_signal}"
-                    elif output_data_for_signal and self.success_message_prefix == "Simulation":
-                        message = output_data_for_signal # Use the specific success message from sim script
-
-                else: # MATLAB exited 0, but no success marker - could be an issue or script didn't use marker
-                    success = False
-                    message = f"{self.success_message_prefix} script finished (MATLAB exit 0), but success marker not found."
-                    message += f"\nStdout:\n{stdout_str[:500]}"
-                    if stderr_str: message += f"\nStderr:\n{stderr_str[:300]}"
-            else: # MATLAB exited with non-zero code
-                success = False
-                error_output = stderr_str or stdout_str # Prefer stderr if available
-                message = f"{self.success_message_prefix} process failed. MATLAB Exit Code {process.returncode}:\n{error_output[:1000]}" # Limit length
-
-            # Emit the original signal that the main thread is listening to
-            self.original_signal.emit(success, message, output_data_for_signal if success else "")
-
-        except subprocess.TimeoutExpired:
-            message = f"{self.success_message_prefix} process timed out after {timeout_seconds/60:.1f} minutes."
-            self.original_signal.emit(False, message, "")
-        except FileNotFoundError:
-            message = f"MATLAB executable not found: {self.matlab_path}"
-            self.original_signal.emit(False, message, "")
-        except Exception as e:
-            message = f"Unexpected error in {self.success_message_prefix} worker: {type(e).__name__}: {str(e)}"
-            self.original_signal.emit(False, message, "")
+                    if output_data and self.success_message_prefix != "Simulation": message += f" Data: {output_data}"
+                    elif output_data and self.success_message_prefix == "Simulation": message = output_data
+                else:
+                    success = False; message = f"{self.success_message_prefix} script OK (exit 0), but no success marker."
+                    message += f"\nStdout: {stdout[:500]}";
+                    if stderr: message += f"\nStderr: {stderr[:300]}"
+            else:
+                success = False; err_out = stderr or stdout
+                message = f"{self.success_message_prefix} process failed. Exit {proc.returncode}:\n{err_out[:1000]}"
+            self.original_signal.emit(success, message, output_data if success else "")
+        except subprocess.TimeoutExpired: self.original_signal.emit(False, f"{self.success_message_prefix} timed out ({timeout_s/60:.1f} min).", "")
+        except FileNotFoundError: self.original_signal.emit(False, f"MATLAB not found: {self.matlab_path}", "")
+        except Exception as e: self.original_signal.emit(False, f"Error in {self.success_message_prefix} worker: {type(e).__name__}: {e}", "")
         finally:
-            # Clean up the temporary script file and directory
             if os.path.exists(self.script_file):
                 try:
-                    os.remove(self.script_file)
-                    script_dir = os.path.dirname(self.script_file)
-                    # Only remove dir if it's one we created and it's empty
-                    if script_dir.startswith(tempfile.gettempdir()) and "bsm_matlab_" in script_dir:
-                        if not os.listdir(script_dir): # Check if empty
-                            os.rmdir(script_dir)
-                        else:
-                            print(f"Warning: Temp directory {script_dir} not empty, not removed.")
-                except OSError as e:
-                    print(f"Warning: Could not clean up temp script/dir '{self.script_file}': {e}")
-            self.finished_signal.emit(success, message, output_data_for_signal) # Signal for thread cleanup
+                    os.remove(self.script_file); script_dir = os.path.dirname(self.script_file)
+                    if script_dir.startswith(tempfile.gettempdir()) and "bsm_matlab_" in script_dir and not os.listdir(script_dir): os.rmdir(script_dir)
+                except OSError as e: print(f"Warning: Could not clean temp '{self.script_file}': {e}")
+            self.finished_signal.emit(success, message, output_data)
 
 
 # --- Draggable Toolbox Buttons ---
 class DraggableToolButton(QPushButton):
     def __init__(self, text, mime_type, item_type_data, parent=None):
-        super().__init__(text, parent)
-        self.setObjectName("DraggableToolButton") # For QSS styling
-        self.mime_type = mime_type
-        self.item_type_data = item_type_data
-        self.setText(text) # QSS will handle padding for icon
-        self.setMinimumHeight(36) # QSS may override or refine
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.drag_start_position = QPoint()
-
+        super().__init__(text, parent); self.setObjectName("DraggableToolButton"); self.mime_type = mime_type
+        self.item_type_data = item_type_data; self.setMinimumHeight(36)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed); self.drag_start_position = QPoint()
     def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.LeftButton:
-            self.drag_start_position = event.pos()
+        if event.button() == Qt.LeftButton: self.drag_start_position = event.pos()
         super().mousePressEvent(event)
-
     def mouseMoveEvent(self, event: QMouseEvent):
-        if not (event.buttons() & Qt.LeftButton):
-            return
-        if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
-            return
+        if not (event.buttons() & Qt.LeftButton) or (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance(): return
+        drag = QDrag(self); mime_data = QMimeData(); mime_data.setText(self.item_type_data)
+        mime_data.setData(self.mime_type, self.item_type_data.encode()); drag.setMimeData(mime_data)
+        px_w = max(160, self.width()); px_h = max(36, self.height()); px_size = QSize(px_w, px_h)
+        pixmap = QPixmap(px_size); pixmap.fill(Qt.transparent); painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing); btn_rect = QRectF(0, 0, px_size.width() - 1, px_size.height() - 1)
+        bg_color = QColor(COLOR_ACCENT_PRIMARY); border_color = QColor(COLOR_ACCENT_PRIMARY).darker(120)
+        text_color_drag = QColor(COLOR_TEXT_ON_ACCENT); painter.setBrush(bg_color)
+        painter.setPen(QPen(border_color, 1.5)); painter.drawRoundedRect(btn_rect.adjusted(0.5,0.5,-0.5,-0.5), 5, 5)
+        icon_s = self.iconSize() if not self.iconSize().isEmpty() else QSize(18,18)
+        icon_px = self.icon().pixmap(icon_s, QIcon.Normal, QIcon.On)
+        pad_l = 10; pad_r = 10; pad_tb = (px_h - icon_s.height()) / 2
+        txt_x_off = pad_l; icon_y_off = pad_tb
+        if not icon_px.isNull(): painter.drawPixmap(int(txt_x_off), int(icon_y_off), icon_px); txt_x_off += icon_px.width() + 8
+        painter.setPen(text_color_drag); font_use = self.font()
+        font_use.setWeight(QFont.Bold if self.font().weight() > QFont.Normal else self.font().weight()); painter.setFont(font_use)
+        txt_rect = QRectF(txt_x_off, 0, px_size.width() - txt_x_off - pad_r, px_size.height())
+        painter.drawText(txt_rect, Qt.AlignVCenter | Qt.AlignLeft, self.text()); painter.end()
+        drag.setPixmap(pixmap); drag.setHotSpot(QPoint(pixmap.width() // 4, pixmap.height() // 2)); drag.exec_(Qt.CopyAction | Qt.MoveAction)
 
-        drag = QDrag(self)
-        mime_data = QMimeData()
-        mime_data.setText(self.item_type_data)
-        mime_data.setData(self.mime_type, self.item_type_data.encode())
-        drag.setMimeData(mime_data)
-
-        # Drag pixmap style matched to DraggableToolButton appearance
-        pixmap_width = max(160, self.width()) # Ensure decent width for drag pixmap
-        pixmap_height = max(36, self.height())
-        pixmap_size = QSize(pixmap_width, pixmap_height)
-        pixmap = QPixmap(pixmap_size)
-        pixmap.fill(Qt.transparent) # Transparent background
-
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        button_rect = QRectF(0, 0, pixmap_size.width() - 1, pixmap_size.height() - 1)
-
-        # Use themed colors for drag pixmap (simulating pressed state)
-        bg_color = QColor(COLOR_ACCENT_PRIMARY) # Simulates pressed state background
-        border_color = QColor(COLOR_ACCENT_PRIMARY).darker(120)
-        text_color_drag = QColor(COLOR_TEXT_ON_ACCENT) # Text on accent
-
-        painter.setBrush(bg_color)
-        painter.setPen(QPen(border_color, 1.5))
-        painter.drawRoundedRect(button_rect.adjusted(0.5,0.5,-0.5,-0.5), 5, 5)
-
-        # Icon and Text drawing (respecting QSS padding and icon-size if possible)
-        icon_actual_size = self.iconSize() if not self.iconSize().isEmpty() else QSize(18,18) # from QSS
-        icon_pixmap = self.icon().pixmap(icon_actual_size, QIcon.Normal, QIcon.On)
-
-        # Approximate padding from QSS
-        padding_left = 10
-        padding_right = 10
-        padding_top_bottom = (pixmap_height - icon_actual_size.height()) / 2 # For vertical centering
-
-        text_x_offset = padding_left
-        icon_y_offset = padding_top_bottom
-
-        if not icon_pixmap.isNull():
-            painter.drawPixmap(int(text_x_offset), int(icon_y_offset), icon_pixmap)
-            text_x_offset += icon_pixmap.width() + 8 # Spacing between icon and text
-
-        painter.setPen(text_color_drag)
-        font_to_use = self.font()
-        font_to_use.setWeight(QFont.Bold if self.font().weight() > QFont.Normal else self.font().weight()) # Match font weight
-        painter.setFont(font_to_use)
-
-        text_rect = QRectF(text_x_offset, 0,
-                           pixmap_size.width() - text_x_offset - padding_right,
-                           pixmap_size.height())
-        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, self.text())
-        painter.end()
-
-        drag.setPixmap(pixmap)
-        drag.setHotSpot(QPoint(pixmap.width() // 4, pixmap.height() // 2)) # Adjust hotspot as needed
-        drag.exec_(Qt.CopyAction | Qt.MoveAction)
-
-
-# --- Graphics Items ---
-class GraphicsStateItem(QGraphicsRectItem): # (No significant changes needed here based on review)
+# --- Graphics Items, Undo Commands, DiagramScene, ZoomableView (Restored full versions) ---
+class GraphicsStateItem(QGraphicsRectItem):
     Type = QGraphicsItem.UserType + 1
     def type(self): return GraphicsStateItem.Type
 
@@ -1258,7 +1045,7 @@ class GraphicsStateItem(QGraphicsRectItem): # (No significant changes needed her
         if self.description != desc: self.description = desc; changed = True
         if changed: self.prepareGeometryChange(); self.update()
 
-class GraphicsTransitionItem(QGraphicsPathItem): # (No significant changes needed here)
+class GraphicsTransitionItem(QGraphicsPathItem):
     Type = QGraphicsItem.UserType + 2
     def type(self): return GraphicsTransitionItem.Type
     def __init__(self, start_item, end_item, event_str="", condition_str="", action_str="",
@@ -1384,12 +1171,14 @@ class GraphicsTransitionItem(QGraphicsPathItem): # (No significant changes neede
             painter.drawRoundedRect(bg_rect, 3, 3)
             painter.setPen(self._text_color); painter.drawText(text_final_pos, current_label)
     def get_data(self):
-        return {'source': self.start_item.text_label if self.start_item else "None",
-                'target': self.end_item.text_label if self.end_item else "None",
-                'event': self.event_str, 'condition': self.condition_str, 'action': self.action_str,
-                'color': self.base_color.name() if self.base_color else QColor(COLOR_ITEM_TRANSITION_DEFAULT).name(),
-                'description': self.description,
-                'control_offset_x': self.control_point_offset.x(), 'control_offset_y': self.control_point_offset.y()}
+        return {
+            'source': self.start_item.text_label if self.start_item else "None",
+            'target': self.end_item.text_label if self.end_item else "None",
+            'event': self.event_str, 'condition': self.condition_str, 'action': self.action_str,
+            'color': self.base_color.name() if self.base_color else QColor(COLOR_ITEM_TRANSITION_DEFAULT).name(),
+            'description': self.description,
+            'control_offset_x': self.control_point_offset.x(), 'control_offset_y': self.control_point_offset.y()
+        }
     def set_properties(self, event_str="", condition_str="", action_str="",
                        color_hex=None, description="", offset=None):
         changed = False
@@ -1400,12 +1189,18 @@ class GraphicsTransitionItem(QGraphicsPathItem): # (No significant changes neede
         new_color = QColor(color_hex) if color_hex else QColor(COLOR_ITEM_TRANSITION_DEFAULT)
         if self.base_color != new_color:
             self.base_color = new_color; self.setPen(QPen(self.base_color, self._pen_width)); changed = True
-        if offset is not None and self.control_point_offset != offset: self.control_point_offset = offset; changed = True
-        if changed: self.prepareGeometryChange(); self.update_path(); self.update()
+        if offset is not None and self.control_point_offset != offset:
+            self.control_point_offset = offset; changed = True # update_path will be called
+        if changed:
+            self.prepareGeometryChange()
+            if offset is not None or self.start_item == self.end_item: # Always update path if offset changed or self-loop
+                self.update_path()
+            self.update()
     def set_control_point_offset(self, offset: QPointF):
-        if self.control_point_offset != offset: self.control_point_offset = offset; self.update_path(); self.update()
+        if self.control_point_offset != offset:
+            self.control_point_offset = offset; self.update_path(); self.update()
 
-class GraphicsCommentItem(QGraphicsTextItem): # (No significant changes needed here)
+class GraphicsCommentItem(QGraphicsTextItem):
     Type = QGraphicsItem.UserType + 3
     def type(self): return GraphicsCommentItem.Type
     def __init__(self, x, y, text="Comment"):
@@ -1439,8 +1234,6 @@ class GraphicsCommentItem(QGraphicsTextItem): # (No significant changes needed h
         if change == QGraphicsItem.ItemPositionHasChanged and self.scene(): self.scene().item_moved.emit(self)
         return super().itemChange(change, value)
 
-
-# --- Undo Commands --- (No changes needed here based on review)
 class AddItemCommand(QUndoCommand):
     def __init__(self, scene, item, description="Add Item"):
         super().__init__(description); self.scene = scene; self.item_instance = item
@@ -1545,9 +1338,7 @@ class EditItemPropertiesCommand(QUndoCommand):
     def redo(self): self._apply_properties(self.new_props_data)
     def undo(self): self._apply_properties(self.old_props_data)
 
-
-# --- Diagram Scene ---
-class DiagramScene(QGraphicsScene): # (No significant changes needed here)
+class DiagramScene(QGraphicsScene):
     item_moved = pyqtSignal(QGraphicsItem)
     modifiedStatusChanged = pyqtSignal(bool)
     def __init__(self, undo_stack, parent_window=None):
@@ -1577,7 +1368,8 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
     def is_dirty(self): return self._dirty
     def set_log_function(self, log_function): self.log_function = log_function
     def set_mode(self, mode: str):
-        old_mode = self.current_mode; self.current_mode = mode
+        old_mode = self.current_mode
+        self.current_mode = mode
         if old_mode == mode: return
         self.log_function(f"Interaction mode changed to: {mode}")
         self.transition_start_item = None
@@ -1612,29 +1404,33 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
                 grid_x = round(pos.x() / self.grid_size) * self.grid_size
                 grid_y = round(pos.y() / self.grid_size) * self.grid_size
                 self._add_item_interactive(QPointF(grid_x, grid_y), item_type="Comment")
-           # ...existing code...
             elif self.current_mode == "transition":
                 if isinstance(top_item_at_pos, GraphicsStateItem): self._handle_transition_click(top_item_at_pos, pos)
                 else:
                     self.transition_start_item = None
                     if self._temp_transition_line: self.removeItem(self._temp_transition_line); self._temp_transition_line = None
                     self.log_function("Transition drawing cancelled.")
-# ...existing code...
-            else:
+            else: # select mode
                 self._mouse_press_items_positions.clear()
-                for item in [i for i in self.selectedItems() if i.flags() & QGraphicsItem.ItemIsMovable]:
+                selected_movable = [item for item in self.selectedItems() if item.flags() & QGraphicsItem.ItemIsMovable]
+                for item in selected_movable:
                      self._mouse_press_items_positions[item] = item.pos()
                 super().mousePressEvent(event)
         elif event.button() == Qt.RightButton:
             if top_item_at_pos and isinstance(top_item_at_pos, (GraphicsStateItem, GraphicsTransitionItem, GraphicsCommentItem)):
-                if not top_item_at_pos.isSelected(): self.clearSelection(); top_item_at_pos.setSelected(True)
+                if not top_item_at_pos.isSelected():
+                    self.clearSelection(); top_item_at_pos.setSelected(True)
                 self._show_context_menu(top_item_at_pos, event.screenPos())
-            else: self.clearSelection()
-        else: super().mousePressEvent(event)
+            else:
+                self.clearSelection()
+        else:
+            super().mousePressEvent(event)
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
         if self.current_mode == "transition" and self.transition_start_item and self._temp_transition_line:
-            self._temp_transition_line.setLine(QLineF(self.transition_start_item.sceneBoundingRect().center(), event.scenePos()))
-        else: super().mouseMoveEvent(event)
+            center_start = self.transition_start_item.sceneBoundingRect().center()
+            self._temp_transition_line.setLine(QLineF(center_start, event.scenePos()))
+        else:
+            super().mouseMoveEvent(event)
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
         if event.button() == Qt.LeftButton and self.current_mode == "select" and self._mouse_press_items_positions:
             moved_items_data = []
@@ -1643,13 +1439,19 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
                 if self.snap_to_grid_enabled:
                     snapped_x = round(new_pos.x() / self.grid_size) * self.grid_size
                     snapped_y = round(new_pos.y() / self.grid_size) * self.grid_size
-                    if new_pos.x() != snapped_x or new_pos.y() != snapped_y: item.setPos(snapped_x, snapped_y); new_pos = QPointF(snapped_x, snapped_y)
-                if (new_pos - old_pos).manhattanLength() > 0.1: moved_items_data.append((item, new_pos))
-            if moved_items_data: self.undo_stack.push(MoveItemsCommand(moved_items_data))
+                    if new_pos.x() != snapped_x or new_pos.y() != snapped_y:
+                        item.setPos(snapped_x, snapped_y)
+                        new_pos = QPointF(snapped_x, snapped_y)
+                if (new_pos - old_pos).manhattanLength() > 0.1: # Only add if actually moved significantly
+                    moved_items_data.append((item, new_pos))
+            if moved_items_data:
+                cmd = MoveItemsCommand(moved_items_data)
+                self.undo_stack.push(cmd)
             self._mouse_press_items_positions.clear()
         super().mouseReleaseEvent(event)
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent):
-        item_to_edit = next((item for item in self.items(event.scenePos()) if isinstance(item, (GraphicsStateItem, GraphicsTransitionItem, GraphicsCommentItem))), None)
+        items_at_pos = self.items(event.scenePos())
+        item_to_edit = next((item for item in items_at_pos if isinstance(item, (GraphicsStateItem, GraphicsTransitionItem, GraphicsCommentItem))), None)
         if item_to_edit: self.edit_item_properties(item_to_edit)
         else: super().mouseDoubleClickEvent(event)
     def _show_context_menu(self, item, global_pos):
@@ -1659,58 +1461,77 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
         action = menu.exec_(global_pos)
         if action == edit_action: self.edit_item_properties(item)
         elif action == delete_action:
-            if not item.isSelected(): self.clearSelection(); item.setSelected(True)
+            if not item.isSelected():
+                self.clearSelection(); item.setSelected(True)
             self.delete_selected_items()
     def edit_item_properties(self, item):
-        old_props = item.get_data(); dialog_accepted = False; new_props_from_dialog = None
+        old_props = item.get_data()
+        dialog_executed_and_accepted = False
+        new_props_from_dialog = None
         if isinstance(item, GraphicsStateItem):
             dialog = StatePropertiesDialog(parent=self.parent_window, current_properties=old_props)
-            if dialog.exec_() == QDialog.Accepted: dialog_accepted=True; new_props_from_dialog = dialog.get_properties()
-            if new_props_from_dialog and new_props_from_dialog['name'] != old_props['name'] and self.get_state_by_name(new_props_from_dialog['name']):
-                QMessageBox.warning(self.parent_window, "Duplicate Name", f"State '{new_props_from_dialog['name']}' already exists."); return
+            if dialog.exec_() == QDialog.Accepted:
+                dialog_executed_and_accepted = True
+                new_props_from_dialog = dialog.get_properties()
+                if new_props_from_dialog['name'] != old_props['name'] and self.get_state_by_name(new_props_from_dialog['name']):
+                    QMessageBox.warning(self.parent_window, "Duplicate Name", f"A state with the name '{new_props_from_dialog['name']}' already exists.")
+                    return
         elif isinstance(item, GraphicsTransitionItem):
             dialog = TransitionPropertiesDialog(parent=self.parent_window, current_properties=old_props)
-            if dialog.exec_() == QDialog.Accepted: dialog_accepted=True; new_props_from_dialog = dialog.get_properties()
+            if dialog.exec_() == QDialog.Accepted:
+                dialog_executed_and_accepted = True
+                new_props_from_dialog = dialog.get_properties()
         elif isinstance(item, GraphicsCommentItem):
             dialog = CommentPropertiesDialog(parent=self.parent_window, current_properties=old_props)
-            if dialog.exec_() == QDialog.Accepted: dialog_accepted=True; new_props_from_dialog = dialog.get_properties()
+            if dialog.exec_() == QDialog.Accepted:
+                dialog_executed_and_accepted = True
+                new_props_from_dialog = dialog.get_properties()
         else: return
-        if dialog_accepted and new_props_from_dialog is not None:
-            final_new_props = old_props.copy(); final_new_props.update(new_props_from_dialog)
+        if dialog_executed_and_accepted and new_props_from_dialog is not None:
+            final_new_props = old_props.copy()
+            final_new_props.update(new_props_from_dialog)
             cmd = EditItemPropertiesCommand(item, old_props, final_new_props, f"Edit {type(item).__name__} Properties")
-            self.undo_stack.push(cmd); log_name = final_new_props.get('name', final_new_props.get('event', final_new_props.get('text', 'Item')))
-            self.log_function(f"Properties updated for: {log_name}")
+            self.undo_stack.push(cmd)
+            item_name_for_log = final_new_props.get('name', final_new_props.get('event', final_new_props.get('text', 'Item')))
+            self.log_function(f"Properties updated for: {item_name_for_log}")
         self.update()
     def _add_item_interactive(self, pos: QPointF, item_type: str, name_prefix:str="Item", initial_data:dict=None):
-        current_item = None; is_initial = initial_data.get('is_initial', False) if initial_data else False
-        is_final = initial_data.get('is_final', False) if initial_data else False
+        current_item = None
+        is_initial_state_from_drag = initial_data.get('is_initial', False) if initial_data else False
+        is_final_state_from_drag = initial_data.get('is_final', False) if initial_data else False
         if item_type == "State":
             i = 1; base_name = name_prefix
             while self.get_state_by_name(f"{base_name}{i}"): i += 1
-            default_name = f"{base_name}{i}"; state_name_input = default_name
-            initial_dialog_props = {'name': state_name_input, 'is_initial': is_initial, 'is_final': is_final,
-                                    'color': initial_data.get('color') if initial_data else COLOR_ITEM_STATE_DEFAULT_BG}
+            default_name = f"{base_name}{i}"; state_name_from_input = default_name
+            initial_dialog_props = {
+                'name': state_name_from_input, 'is_initial': is_initial_state_from_drag, 'is_final': is_final_state_from_drag,
+                'color': initial_data.get('color') if initial_data else COLOR_ITEM_STATE_DEFAULT_BG
+            }
             props_dialog = StatePropertiesDialog(self.parent_window, current_properties=initial_dialog_props, is_new_state=True)
             if props_dialog.exec_() == QDialog.Accepted:
                 final_props = props_dialog.get_properties()
-                if self.get_state_by_name(final_props['name']) and final_props['name'] != state_name_input:
-                     QMessageBox.warning(self.parent_window, "Duplicate Name", f"State '{final_props['name']}' already exists.")
+                if self.get_state_by_name(final_props['name']) and final_props['name'] != state_name_from_input :
+                     QMessageBox.warning(self.parent_window, "Duplicate Name", f"A state named '{final_props['name']}' already exists.")
                      if self.current_mode == "state": self.set_mode("select"); return
-                current_item = GraphicsStateItem(pos.x(), pos.y(), 120, 60, final_props['name'], final_props['is_initial'], final_props['is_final'],
-                                                 final_props.get('color'), final_props.get('entry_action',""), final_props.get('during_action',""),
-                                                 final_props.get('exit_action',""), final_props.get('description',""))
+                current_item = GraphicsStateItem(
+                    pos.x(), pos.y(), 120, 60, final_props['name'], final_props['is_initial'], final_props['is_final'],
+                    final_props.get('color'), final_props.get('entry_action',""), final_props.get('during_action',""),
+                    final_props.get('exit_action',""), final_props.get('description',"")
+                )
             else:
                 if self.current_mode == "state": self.set_mode("select"); return
         elif item_type == "Comment":
             initial_text = (initial_data.get('text', "Comment") if initial_data else (name_prefix if name_prefix != "Item" else "Comment"))
             text, ok = QInputDialog.getMultiLineText(self.parent_window, "New Comment", "Enter comment text:", initial_text)
-            if ok and text: current_item = GraphicsCommentItem(pos.x(), pos.y(), text)
+            if ok and text:
+                current_item = GraphicsCommentItem(pos.x(), pos.y(), text)
             else:
                 if self.current_mode == "comment": self.set_mode("select"); return
         else: self.log_function(f"Unknown item type for addition: {item_type}"); return
         if current_item:
             cmd = AddItemCommand(self, current_item, f"Add {item_type}")
-            self.undo_stack.push(cmd); log_name = current_item.text_label if hasattr(current_item, 'text_label') else current_item.toPlainText()
+            self.undo_stack.push(cmd)
+            log_name = current_item.text_label if hasattr(current_item, 'text_label') else current_item.toPlainText()
             self.log_function(f"Added {item_type}: {log_name} at ({pos.x():.0f},{pos.y():.0f})")
         if self.current_mode in ["state", "comment"]: self.set_mode("select")
     def _handle_transition_click(self, clicked_state_item: GraphicsStateItem, click_pos: QPointF):
@@ -1720,21 +1541,27 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
                 self._temp_transition_line = QGraphicsLineItem()
                 self._temp_transition_line.setPen(QPen(QColor(COLOR_ACCENT_PRIMARY), 1.8, Qt.DashLine))
                 self.addItem(self._temp_transition_line)
-            self._temp_transition_line.setLine(QLineF(self.transition_start_item.sceneBoundingRect().center(), click_pos))
+            center_start = self.transition_start_item.sceneBoundingRect().center()
+            self._temp_transition_line.setLine(QLineF(center_start, click_pos))
             self.log_function(f"Transition started from: {clicked_state_item.text_label}. Click target state.")
         else:
             if self._temp_transition_line: self.removeItem(self._temp_transition_line); self._temp_transition_line = None
-            initial_props = {'event': "", 'condition': "", 'action': "", 'color': COLOR_ITEM_TRANSITION_DEFAULT,
-                             'description':"", 'control_offset_x':0, 'control_offset_y':0}
+            initial_props = {
+                'event': "", 'condition': "", 'action': "", 'color': COLOR_ITEM_TRANSITION_DEFAULT,
+                'description':"", 'control_offset_x':0, 'control_offset_y':0
+            }
             dialog = TransitionPropertiesDialog(self.parent_window, current_properties=initial_props, is_new_transition=True)
             if dialog.exec_() == QDialog.Accepted:
                 props = dialog.get_properties()
-                new_transition = GraphicsTransitionItem(self.transition_start_item, clicked_state_item, event_str=props['event'],
-                                                        condition_str=props['condition'], action_str=props['action'],
-                                                        color=props.get('color'), description=props.get('description', ""))
+                new_transition = GraphicsTransitionItem(
+                    self.transition_start_item, clicked_state_item, event_str=props['event'],
+                    condition_str=props['condition'], action_str=props['action'],
+                    color=props.get('color'), description=props.get('description', "")
+                )
                 new_transition.set_control_point_offset(QPointF(props['control_offset_x'],props['control_offset_y']))
                 cmd = AddItemCommand(self, new_transition, "Add Transition")
-                self.undo_stack.push(cmd); self.log_function(f"Added transition: {self.transition_start_item.text_label} -> {clicked_state_item.text_label} [{new_transition._compose_label_string()}]")
+                self.undo_stack.push(cmd)
+                self.log_function(f"Added transition: {self.transition_start_item.text_label} -> {clicked_state_item.text_label} [{new_transition._compose_label_string()}]")
             else: self.log_function("Transition addition cancelled.")
             self.transition_start_item = None; self.set_mode("select")
     def keyPressEvent(self, event: QKeyEvent):
@@ -1749,18 +1576,21 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
             else: self.clearSelection()
         else: super().keyPressEvent(event)
     def delete_selected_items(self):
-        selected = self.selectedItems();
+        selected = self.selectedItems()
         if not selected: return
-        items_to_delete = set()
+        items_to_delete_with_related = set()
         for item in selected:
-            items_to_delete.add(item)
+            items_to_delete_with_related.add(item)
             if isinstance(item, GraphicsStateItem):
                 for scene_item in self.items():
-                    if isinstance(scene_item, GraphicsTransitionItem) and (scene_item.start_item == item or scene_item.end_item == item):
-                        items_to_delete.add(scene_item)
-        if items_to_delete:
-            cmd = RemoveItemsCommand(self, list(items_to_delete), "Delete Items")
-            self.undo_stack.push(cmd); self.log_function(f"Queued deletion of {len(items_to_delete)} item(s)."); self.clearSelection()
+                    if isinstance(scene_item, GraphicsTransitionItem) and \
+                       (scene_item.start_item == item or scene_item.end_item == item):
+                        items_to_delete_with_related.add(scene_item)
+        if items_to_delete_with_related:
+            cmd = RemoveItemsCommand(self, list(items_to_delete_with_related), "Delete Items")
+            self.undo_stack.push(cmd)
+            self.log_function(f"Queued deletion of {len(items_to_delete_with_related)} item(s).")
+            self.clearSelection()
     def dragEnterEvent(self, event: QGraphicsSceneDragDropEvent):
         if event.mimeData().hasFormat("application/x-bsm-tool"): event.setAccepted(True); event.acceptProposedAction()
         else: super().dragEnterEvent(event)
@@ -1770,17 +1600,17 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
     def dropEvent(self, event: QGraphicsSceneDragDropEvent):
         pos = event.scenePos()
         if event.mimeData().hasFormat("application/x-bsm-tool"):
-            item_type_str = event.mimeData().text()
+            item_type_data_str = event.mimeData().text()
             grid_x = round(pos.x() / self.grid_size) * self.grid_size
             grid_y = round(pos.y() / self.grid_size) * self.grid_size
-            if "State" in item_type_str: grid_x -= 60; grid_y -= 30 # Adjust for state center
-            initial_props = {}; item_to_add = "Item"; name_prefix = "Item"
-            if item_type_str == "State": item_to_add = "State"; name_prefix = "State"
-            elif item_type_str == "Initial State": item_to_add = "State"; name_prefix = "Initial"; initial_props['is_initial'] = True
-            elif item_type_str == "Final State": item_to_add = "State"; name_prefix = "Final"; initial_props['is_final'] = True
-            elif item_type_str == "Comment": item_to_add = "Comment"; name_prefix = "Note"
-            else: self.log_function(f"Unknown item type dropped: {item_type_str}"); event.ignore(); return
-            self._add_item_interactive(QPointF(grid_x, grid_y), item_type=item_to_add, name_prefix=name_prefix, initial_data=initial_props)
+            if "State" in item_type_data_str: grid_x -= 60; grid_y -= 30
+            initial_props_for_add = {}; actual_item_type_to_add = "Item"; name_prefix_for_add = "Item"
+            if item_type_data_str == "State": actual_item_type_to_add = "State"; name_prefix_for_add = "State"
+            elif item_type_data_str == "Initial State": actual_item_type_to_add = "State"; name_prefix_for_add = "Initial"; initial_props_for_add['is_initial'] = True
+            elif item_type_data_str == "Final State": actual_item_type_to_add = "State"; name_prefix_for_add = "Final"; initial_props_for_add['is_final'] = True
+            elif item_type_data_str == "Comment": actual_item_type_to_add = "Comment"; name_prefix_for_add = "Note"
+            else: self.log_function(f"Unknown item type dropped: {item_type_data_str}"); event.ignore(); return
+            self._add_item_interactive(QPointF(grid_x, grid_y), item_type=actual_item_type_to_add, name_prefix=name_prefix_for_add, initial_data=initial_props_for_add)
             event.acceptProposedAction()
         else: super().dropEvent(event)
     def get_diagram_data(self):
@@ -1831,9 +1661,7 @@ class DiagramScene(QGraphicsScene): # (No significant changes needed here)
         for x in range(first_major_left, right, major_grid_size): painter.drawLine(x, top, x, bottom)
         for y in range(first_major_top, bottom, major_grid_size): painter.drawLine(left, y, right, y)
 
-
-# --- Zoomable Graphics View ---
-class ZoomableView(QGraphicsView): # (No significant changes needed here)
+class ZoomableView(QGraphicsView):
     def __init__(self, scene, parent=None):
         super().__init__(scene, parent)
         self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform | QPainter.TextAntialiasing)
@@ -1852,13 +1680,16 @@ class ZoomableView(QGraphicsView): # (No significant changes needed here)
         if event.key() == Qt.Key_Space and not self._is_panning_with_space and not event.isAutoRepeat():
             self._is_panning_with_space = True; self._last_pan_point = self.mapFromGlobal(QCursor.pos())
             self.setCursor(Qt.OpenHandCursor); event.accept()
-        elif event.key() == Qt.Key_Plus or event.key() == Qt.Key_Equal: self.scale(1.12, 1.12); self.zoom_level +=1
-        elif event.key() == Qt.Key_Minus: self.scale(1/1.12, 1/1.12); self.zoom_level -=1
+        elif event.key() == Qt.Key_Plus or event.key() == Qt.Key_Equal:
+            self.scale(1.12, 1.12); self.zoom_level +=1
+        elif event.key() == Qt.Key_Minus:
+            self.scale(1/1.12, 1/1.12); self.zoom_level -=1
         elif event.key() == Qt.Key_0 or event.key() == Qt.Key_Asterisk:
              self.resetTransform(); self.zoom_level = 0
-             if self.scene(): content_rect = self.scene().itemsBoundingRect()
-             if not content_rect.isEmpty(): self.centerOn(content_rect.center())
-             else: self.centerOn(self.scene().sceneRect().center())
+             if self.scene():
+                content_rect = self.scene().itemsBoundingRect()
+                if not content_rect.isEmpty(): self.centerOn(content_rect.center())
+                else: self.centerOn(self.scene().sceneRect().center())
         else: super().keyPressEvent(event)
     def keyReleaseEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Space and self._is_panning_with_space and not event.isAutoRepeat():
@@ -1867,15 +1698,21 @@ class ZoomableView(QGraphicsView): # (No significant changes needed here)
             event.accept()
         else: super().keyReleaseEvent(event)
     def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.MiddleButton or (self._is_panning_with_space and event.button() == Qt.LeftButton):
-            self._last_pan_point = event.pos(); self.setCursor(Qt.ClosedHandCursor)
-            self._is_panning_with_mouse_button = True; event.accept()
-        else: self._is_panning_with_mouse_button = False; super().mousePressEvent(event)
+        if event.button() == Qt.MiddleButton or \
+           (self._is_panning_with_space and event.button() == Qt.LeftButton):
+            self._last_pan_point = event.pos()
+            self.setCursor(Qt.ClosedHandCursor)
+            self._is_panning_with_mouse_button = True
+            event.accept()
+        else:
+            self._is_panning_with_mouse_button = False
+            super().mousePressEvent(event)
     def mouseMoveEvent(self, event: QMouseEvent):
         if self._is_panning_with_mouse_button:
             delta_view = event.pos() - self._last_pan_point; self._last_pan_point = event.pos()
             hsbar = self.horizontalScrollBar(); vsbar = self.verticalScrollBar()
-            hsbar.setValue(hsbar.value() - delta_view.x()); vsbar.setValue(vsbar.value() - delta_view.y())
+            hsbar.setValue(hsbar.value() - delta_view.x())
+            vsbar.setValue(vsbar.value() - delta_view.y())
             event.accept()
         else: super().mouseMoveEvent(event)
     def mouseReleaseEvent(self, event: QMouseEvent):
@@ -1893,8 +1730,7 @@ class ZoomableView(QGraphicsView): # (No significant changes needed here)
         elif current_scene_mode == "transition": self.setCursor(Qt.PointingHandCursor)
         else: self.setCursor(Qt.ArrowCursor)
 
-
-# --- Dialogs ---
+# --- Dialogs --- (Restored with proper formatting)
 class StatePropertiesDialog(QDialog):
     def __init__(self, parent=None, current_properties=None, is_new_state=False):
         super().__init__(parent)
@@ -1904,34 +1740,27 @@ class StatePropertiesDialog(QDialog):
 
         layout = QFormLayout(self)
         layout.setSpacing(8); layout.setContentsMargins(12,12,12,12)
-
         p = current_properties or {}
         self.name_edit = QLineEdit(p.get('name', "StateName"))
         self.name_edit.setPlaceholderText("Unique name for the state")
-
         self.is_initial_cb = QCheckBox("Is Initial State")
         self.is_initial_cb.setChecked(p.get('is_initial', False))
         self.is_final_cb = QCheckBox("Is Final State")
         self.is_final_cb.setChecked(p.get('is_final', False))
-
         self.color_button = QPushButton("Choose Color...")
         self.color_button.setObjectName("ColorButton")
         self.current_color = QColor(p.get('color', COLOR_ITEM_STATE_DEFAULT_BG))
         self._update_color_button_style()
         self.color_button.clicked.connect(self._choose_color)
-
         self.entry_action_edit = QTextEdit(p.get('entry_action', ""))
         self.entry_action_edit.setFixedHeight(65); self.entry_action_edit.setPlaceholderText("MATLAB actions on entry...")
         entry_action_btn = self._create_insert_snippet_button(self.entry_action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
-
         self.during_action_edit = QTextEdit(p.get('during_action', ""))
         self.during_action_edit.setFixedHeight(65); self.during_action_edit.setPlaceholderText("MATLAB actions during state...")
         during_action_btn = self._create_insert_snippet_button(self.during_action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
-
         self.exit_action_edit = QTextEdit(p.get('exit_action', ""))
         self.exit_action_edit.setFixedHeight(65); self.exit_action_edit.setPlaceholderText("MATLAB actions on exit...")
         exit_action_btn = self._create_insert_snippet_button(self.exit_action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
-
         self.description_edit = QTextEdit(p.get('description', ""))
         self.description_edit.setFixedHeight(75); self.description_edit.setPlaceholderText("Optional notes about this state")
 
@@ -1959,10 +1788,9 @@ class StatePropertiesDialog(QDialog):
 
     def _create_insert_snippet_button(self, target_widget, snippets_dict: dict, button_text="Insert...", icon_size_px=14):
         button = QPushButton(button_text)
-        button.setObjectName("SnippetButton") # QSS handles icon-size, padding
-        button.setToolTip(f"Insert common snippets into the text field.")
-        button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView,"Ins", target_size=QSize(icon_size_px + 2, icon_size_px + 2))) # Generate slightly larger for better scaling
-        # button.setIconSize(QSize(icon_size_px, icon_size_px)) # QSS should handle this via #SnippetButton
+        button.setObjectName("SnippetButton")
+        button.setToolTip(f"Insert common snippets")
+        button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView,"Ins", target_size=QSize(icon_size_px+2, icon_size_px+2)))
         menu = QMenu(self)
         for name, snippet in snippets_dict.items():
             action = QAction(name, self)
@@ -1981,19 +1809,20 @@ class StatePropertiesDialog(QDialog):
     def _choose_color(self):
         color = QColorDialog.getColor(self.current_color, self, "Select State Color")
         if color.isValid(): self.current_color = color; self._update_color_button_style()
-
     def _update_color_button_style(self):
-        l = self.current_color.lightnessF()
-        text_color = COLOR_TEXT_PRIMARY if l > 0.5 else COLOR_TEXT_ON_ACCENT
-        self.color_button.setStyleSheet(f"background-color: {self.current_color.name()}; color: {text_color};")
-
+        l = self.current_color.lightnessF(); tc = COLOR_TEXT_PRIMARY if l > 0.5 else COLOR_TEXT_ON_ACCENT
+        self.color_button.setStyleSheet(f"background-color: {self.current_color.name()}; color: {tc};")
     def get_properties(self):
-        return {'name': self.name_edit.text().strip(), 'is_initial': self.is_initial_cb.isChecked(),
-                'is_final': self.is_final_cb.isChecked(), 'color': self.current_color.name(),
-                'entry_action': self.entry_action_edit.toPlainText().strip(),
-                'during_action': self.during_action_edit.toPlainText().strip(),
-                'exit_action': self.exit_action_edit.toPlainText().strip(),
-                'description': self.description_edit.toPlainText().strip()}
+        return {
+            'name': self.name_edit.text().strip(),
+            'is_initial': self.is_initial_cb.isChecked(),
+            'is_final': self.is_final_cb.isChecked(),
+            'color': self.current_color.name(),
+            'entry_action': self.entry_action_edit.toPlainText().strip(),
+            'during_action': self.during_action_edit.toPlainText().strip(),
+            'exit_action': self.exit_action_edit.toPlainText().strip(),
+            'description': self.description_edit.toPlainText().strip()
+        }
 
 class TransitionPropertiesDialog(QDialog):
     def __init__(self, parent=None, current_properties=None, is_new_transition=False):
@@ -2001,62 +1830,40 @@ class TransitionPropertiesDialog(QDialog):
         self.setWindowTitle("Transition Properties")
         self.setWindowIcon(get_standard_icon(QStyle.SP_FileDialogInfoView, "Props", target_size=QSize(20,20)))
         self.setMinimumWidth(520)
-
         layout = QFormLayout(self)
         layout.setSpacing(8); layout.setContentsMargins(12,12,12,12)
-
         p = current_properties or {}
-        self.event_edit = QLineEdit(p.get('event', ""))
-        self.event_edit.setPlaceholderText("e.g., timeout, button_press(ID)")
+        self.event_edit = QLineEdit(p.get('event', "")); self.event_edit.setPlaceholderText("e.g., timeout, button_press(ID)")
         event_btn = self._create_insert_snippet_button(self.event_edit, MECHATRONICS_COMMON_EVENTS, " Insert Event")
-
-        self.condition_edit = QLineEdit(p.get('condition', ""))
-        self.condition_edit.setPlaceholderText("e.g., var_x > 10 && flag_y == true")
+        self.condition_edit = QLineEdit(p.get('condition', "")); self.condition_edit.setPlaceholderText("e.g., var_x > 10")
         condition_btn = self._create_insert_snippet_button(self.condition_edit, MECHATRONICS_COMMON_CONDITIONS, " Insert Condition")
-
-        self.action_edit = QTextEdit(p.get('action', ""))
-        self.action_edit.setPlaceholderText("MATLAB actions on transition..."); self.action_edit.setFixedHeight(65)
+        self.action_edit = QTextEdit(p.get('action', "")); self.action_edit.setPlaceholderText("MATLAB actions...")
+        self.action_edit.setFixedHeight(65)
         action_btn = self._create_insert_snippet_button(self.action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
-
-        self.color_button = QPushButton("Choose Color...")
-        self.color_button.setObjectName("ColorButton")
+        self.color_button = QPushButton("Choose Color..."); self.color_button.setObjectName("ColorButton")
         self.current_color = QColor(p.get('color', COLOR_ITEM_TRANSITION_DEFAULT))
-        self._update_color_button_style()
-        self.color_button.clicked.connect(self._choose_color)
-
-        self.offset_perp_spin = QSpinBox(); self.offset_perp_spin.setRange(-1000, 1000); self.offset_perp_spin.setSingleStep(10)
-        self.offset_perp_spin.setValue(int(p.get('control_offset_x', 0))); self.offset_perp_spin.setToolTip("Perpendicular bend.")
-        self.offset_tang_spin = QSpinBox(); self.offset_tang_spin.setRange(-1000, 1000); self.offset_tang_spin.setSingleStep(10)
-        self.offset_tang_spin.setValue(int(p.get('control_offset_y', 0))); self.offset_tang_spin.setToolTip("Tangential mid shift.")
-
-        self.description_edit = QTextEdit(p.get('description', ""))
-        self.description_edit.setFixedHeight(75); self.description_edit.setPlaceholderText("Optional notes")
-
+        self._update_color_button_style(); self.color_button.clicked.connect(self._choose_color)
+        self.offset_perp_spin = QSpinBox(); self.offset_perp_spin.setRange(-1000,1000); self.offset_perp_spin.setSingleStep(10)
+        self.offset_perp_spin.setValue(int(p.get('control_offset_x',0))); self.offset_perp_spin.setToolTip("Perpendicular bend.")
+        self.offset_tang_spin = QSpinBox(); self.offset_tang_spin.setRange(-1000,1000); self.offset_tang_spin.setSingleStep(10)
+        self.offset_tang_spin.setValue(int(p.get('control_offset_y',0))); self.offset_tang_spin.setToolTip("Tangential mid shift.")
+        self.description_edit = QTextEdit(p.get('description', "")); self.description_edit.setFixedHeight(75); self.description_edit.setPlaceholderText("Optional notes")
         def add_field_with_button(label_text, edit_widget, button):
-            h_layout = QHBoxLayout(); h_layout.setSpacing(5); h_layout.addWidget(edit_widget, 1)
+            h_layout = QHBoxLayout(); h_layout.setSpacing(5); h_layout.addWidget(edit_widget,1)
             v_button_layout = QVBoxLayout(); v_button_layout.addWidget(button); v_button_layout.addStretch()
-            h_layout.addLayout(v_button_layout); layout.addRow(label_text, h_layout)
-
-        add_field_with_button("Event Trigger:", self.event_edit, event_btn)
-        add_field_with_button("Condition (Guard):", self.condition_edit, condition_btn)
-        add_field_with_button("Transition Action:", self.action_edit, action_btn)
-        layout.addRow("Color:", self.color_button)
-        curve_layout = QHBoxLayout()
-        curve_layout.addWidget(QLabel("Bend (Perp):")); curve_layout.addWidget(self.offset_perp_spin)
-        curve_layout.addSpacing(10); curve_layout.addWidget(QLabel("Mid Shift (Tang):")); curve_layout.addWidget(self.offset_tang_spin)
-        curve_layout.addStretch(); layout.addRow("Curve Shape:", curve_layout)
-        layout.addRow("Description:", self.description_edit)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
+            h_layout.addLayout(v_button_layout); layout.addRow(label_text,h_layout)
+        add_field_with_button("Event Trigger:",self.event_edit,event_btn)
+        add_field_with_button("Condition (Guard):",self.condition_edit,condition_btn)
+        add_field_with_button("Transition Action:",self.action_edit,action_btn)
+        layout.addRow("Color:",self.color_button)
+        curve_layout=QHBoxLayout();curve_layout.addWidget(QLabel("Bend (Perp):"));curve_layout.addWidget(self.offset_perp_spin)
+        curve_layout.addSpacing(10);curve_layout.addWidget(QLabel("Mid Shift (Tang):"));curve_layout.addWidget(self.offset_tang_spin)
+        curve_layout.addStretch();layout.addRow("Curve Shape:",curve_layout); layout.addRow("Description:",self.description_edit)
+        buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel);buttons.accepted.connect(self.accept);buttons.rejected.connect(self.reject);layout.addRow(buttons)
         if is_new_transition: self.event_edit.setFocus()
-
-    # Copied from StatePropertiesDialog for standalone use, or could be a static/utility method
-    def _create_insert_snippet_button(self, target_widget, snippets_dict: dict, button_text="Insert...", icon_size_px=14):
-        button = QPushButton(button_text)
-        button.setObjectName("SnippetButton")
-        button.setToolTip(f"Insert common snippets into the text field.")
-        button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView,"Ins", target_size=QSize(icon_size_px + 2, icon_size_px + 2)))
+    def _create_insert_snippet_button(self, target_widget, snippets_dict: dict, button_text="Insert...", icon_size_px=14): # Same as in StatePropertiesDialog
+        button = QPushButton(button_text); button.setObjectName("SnippetButton")
+        button.setToolTip(f"Insert common snippets"); button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView,"Ins", target_size=QSize(icon_size_px+2, icon_size_px+2)))
         menu = QMenu(self)
         for name, snippet in snippets_dict.items():
             action = QAction(name, self)
@@ -2069,137 +1876,101 @@ class TransitionPropertiesDialog(QDialog):
                     line_edit.setText(new_text); line_edit.setCursorPosition(cursor_pos + len(s))
                  action.triggered.connect(insert_logic)
             menu.addAction(action)
-        button.setMenu(menu)
-        return button
-
+        button.setMenu(menu); return button
     def _choose_color(self):
         color = QColorDialog.getColor(self.current_color, self, "Select Transition Color")
         if color.isValid(): self.current_color = color; self._update_color_button_style()
-
     def _update_color_button_style(self):
-        l = self.current_color.lightnessF()
-        text_color = COLOR_TEXT_PRIMARY if l > 0.5 else COLOR_TEXT_ON_ACCENT
-        self.color_button.setStyleSheet(f"background-color: {self.current_color.name()}; color: {text_color};")
-
+        l=self.current_color.lightnessF();tc=COLOR_TEXT_PRIMARY if l>0.5 else COLOR_TEXT_ON_ACCENT
+        self.color_button.setStyleSheet(f"background-color: {self.current_color.name()}; color: {tc};")
     def get_properties(self):
-        return {'event': self.event_edit.text().strip(), 'condition': self.condition_edit.text().strip(),
-                'action': self.action_edit.toPlainText().strip(), 'color': self.current_color.name(),
-                'control_offset_x': self.offset_perp_spin.value(), 'control_offset_y': self.offset_tang_spin.value(),
-                'description': self.description_edit.toPlainText().strip()}
+        return {
+            'event':self.event_edit.text().strip(),'condition':self.condition_edit.text().strip(),
+            'action':self.action_edit.toPlainText().strip(),'color':self.current_color.name(),
+            'control_offset_x':self.offset_perp_spin.value(),'control_offset_y':self.offset_tang_spin.value(),
+            'description':self.description_edit.toPlainText().strip()
+        }
 
-class CommentPropertiesDialog(QDialog): # (No significant changes needed here)
+class CommentPropertiesDialog(QDialog):
     def __init__(self, parent=None, current_properties=None):
         super().__init__(parent); self.setWindowTitle("Comment Properties")
         self.setWindowIcon(get_standard_icon(QStyle.SP_MessageBoxInformation, "Cmt", target_size=QSize(20,20)))
         p = current_properties or {}
-        layout = QVBoxLayout(self); layout.setSpacing(8); layout.setContentsMargins(12,12,12,12)
-        self.text_edit = QTextEdit(p.get('text', "Comment"))
-        self.text_edit.setMinimumHeight(100); self.text_edit.setPlaceholderText("Enter comment text")
-        layout.addWidget(QLabel("Comment Text:")); layout.addWidget(self.text_edit)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons); self.setMinimumWidth(380)
-        self.text_edit.setFocus(); self.text_edit.selectAll()
+        layout=QVBoxLayout(self);layout.setSpacing(8);layout.setContentsMargins(12,12,12,12)
+        self.text_edit=QTextEdit(p.get('text',"Comment"))
+        self.text_edit.setMinimumHeight(100);self.text_edit.setPlaceholderText("Enter comment text")
+        layout.addWidget(QLabel("Comment Text:"));layout.addWidget(self.text_edit)
+        buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept);buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons);self.setMinimumWidth(380);self.text_edit.setFocus();self.text_edit.selectAll()
     def get_properties(self): return {'text': self.text_edit.toPlainText()}
 
-class MatlabSettingsDialog(QDialog): # (Icon sizing for buttons)
+class MatlabSettingsDialog(QDialog):
     def __init__(self, matlab_connection, parent=None):
         super().__init__(parent); self.matlab_connection = matlab_connection
         self.setWindowTitle("MATLAB Settings")
         self.setWindowIcon(get_standard_icon(QStyle.SP_ComputerIcon, "Cfg", target_size=QSize(20,20)))
         self.setMinimumWidth(580)
-        main_layout = QVBoxLayout(self); main_layout.setSpacing(10); main_layout.setContentsMargins(10,10,10,10)
-        path_group = QGroupBox("MATLAB Executable Path")
-        path_form_layout = QFormLayout(); self.path_edit = QLineEdit(self.matlab_connection.matlab_path)
+        main_layout=QVBoxLayout(self);main_layout.setSpacing(10);main_layout.setContentsMargins(10,10,10,10)
+        path_group=QGroupBox("MATLAB Executable Path");path_form_layout=QFormLayout()
+        self.path_edit=QLineEdit(self.matlab_connection.matlab_path)
         self.path_edit.setPlaceholderText("e.g., C:\\...\\MATLAB\\R202Xy\\bin\\matlab.exe")
-        path_form_layout.addRow("Path:", self.path_edit)
-        btn_layout = QHBoxLayout(); btn_layout.setSpacing(6)
-        btn_icon_size = QSize(16,16) # For dialog buttons
-
-        auto_detect_btn = QPushButton(get_standard_icon(QStyle.SP_BrowserReload,"Det", target_size=btn_icon_size), " Auto-detect")
-        auto_detect_btn.setIconSize(btn_icon_size); auto_detect_btn.clicked.connect(self._auto_detect)
+        path_form_layout.addRow("Path:",self.path_edit)
+        btn_layout=QHBoxLayout();btn_layout.setSpacing(6);btn_icon_size=QSize(16,16)
+        auto_detect_btn=QPushButton(get_standard_icon(QStyle.SP_BrowserReload,"Det",target_size=btn_icon_size)," Auto-detect")
+        auto_detect_btn.setIconSize(btn_icon_size);auto_detect_btn.clicked.connect(self._auto_detect)
         auto_detect_btn.setToolTip("Attempt to find MATLAB installations.")
-        browse_btn = QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon, "Brw", target_size=btn_icon_size), " Browse...")
-        browse_btn.setIconSize(btn_icon_size); browse_btn.clicked.connect(self._browse)
+        browse_btn=QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon,"Brw",target_size=btn_icon_size)," Browse...")
+        browse_btn.setIconSize(btn_icon_size);browse_btn.clicked.connect(self._browse)
         browse_btn.setToolTip("Browse for MATLAB executable.")
-        btn_layout.addWidget(auto_detect_btn); btn_layout.addWidget(browse_btn); btn_layout.addStretch()
-        path_v_layout = QVBoxLayout(); path_v_layout.setSpacing(8)
-        path_v_layout.addLayout(path_form_layout); path_v_layout.addLayout(btn_layout)
-        path_group.setLayout(path_v_layout); main_layout.addWidget(path_group)
-        test_group = QGroupBox("Connection Test")
-        test_layout = QVBoxLayout(); test_layout.setSpacing(8)
-        self.test_status_label = QLabel("Status: Unknown"); self.test_status_label.setWordWrap(True)
-        self.test_status_label.setTextInteractionFlags(Qt.TextSelectableByMouse); self.test_status_label.setMinimumHeight(30)
-        test_btn = QPushButton(get_standard_icon(QStyle.SP_CommandLink,"Test", target_size=btn_icon_size), " Test Connection")
-        test_btn.setIconSize(btn_icon_size); test_btn.clicked.connect(self._test_connection_and_update_label)
+        btn_layout.addWidget(auto_detect_btn);btn_layout.addWidget(browse_btn);btn_layout.addStretch()
+        path_v_layout=QVBoxLayout();path_v_layout.setSpacing(8);path_v_layout.addLayout(path_form_layout)
+        path_v_layout.addLayout(btn_layout);path_group.setLayout(path_v_layout);main_layout.addWidget(path_group)
+        test_group=QGroupBox("Connection Test");test_layout=QVBoxLayout();test_layout.setSpacing(8)
+        self.test_status_label=QLabel("Status: Unknown");self.test_status_label.setWordWrap(True)
+        self.test_status_label.setTextInteractionFlags(Qt.TextSelectableByMouse);self.test_status_label.setMinimumHeight(30)
+        test_btn=QPushButton(get_standard_icon(QStyle.SP_CommandLink,"Test",target_size=btn_icon_size)," Test Connection")
+        test_btn.setIconSize(btn_icon_size);test_btn.clicked.connect(self._test_connection_and_update_label)
         test_btn.setToolTip("Test connection to the specified MATLAB path.")
-        test_layout.addWidget(test_btn); test_layout.addWidget(self.test_status_label, 1)
-        test_group.setLayout(test_layout); main_layout.addWidget(test_group)
-        dialog_buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        # QSS handles styling of "OK" like buttons, .setText("Apply & Close") for one button is an option
+        test_layout.addWidget(test_btn);test_layout.addWidget(self.test_status_label,1);test_group.setLayout(test_layout)
+        main_layout.addWidget(test_group)
+        dialog_buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
         dialog_buttons.button(QDialogButtonBox.Ok).setText("Apply & Close")
-        dialog_buttons.accepted.connect(self._apply_settings); dialog_buttons.rejected.connect(self.reject)
-        main_layout.addWidget(dialog_buttons)
-        self.matlab_connection.connectionStatusChanged.connect(self._update_test_label_from_signal)
-        # Initial status update
+        dialog_buttons.accepted.connect(self._apply_settings);dialog_buttons.rejected.connect(self.reject)
+        main_layout.addWidget(dialog_buttons);self.matlab_connection.connectionStatusChanged.connect(self._update_test_label_from_signal)
         if self.matlab_connection.matlab_path and self.matlab_connection.connected:
             self._update_test_label_from_signal(True, f"Connected: {self.matlab_connection.matlab_path}")
         elif self.matlab_connection.matlab_path:
              self._update_test_label_from_signal(False, f"Path set: {self.matlab_connection.matlab_path}. Test or auto-detect if unsure.")
         else: self._update_test_label_from_signal(False, "MATLAB path not set.")
-
     def _auto_detect(self):
         self.test_status_label.setText("Status: Auto-detecting MATLAB, please wait...")
-        self.test_status_label.setStyleSheet("") # Clear specific color
-        QApplication.processEvents() # Allow UI to update
-        self.matlab_connection.detect_matlab() # This will emit connectionStatusChanged
-
+        self.test_status_label.setStyleSheet(""); QApplication.processEvents()
+        self.matlab_connection.detect_matlab()
     def _browse(self):
         exe_filter = "MATLAB Executable (matlab.exe)" if sys.platform == 'win32' else "MATLAB Executable (matlab);;All Files (*)"
         start_dir = os.path.dirname(self.path_edit.text()) if self.path_edit.text() and os.path.isdir(os.path.dirname(self.path_edit.text())) else QDir.homePath()
         path, _ = QFileDialog.getOpenFileName(self, "Select MATLAB Executable", start_dir, exe_filter)
-        if path:
-            self.path_edit.setText(path)
-            # Don't immediately set and test; let user click "Test" or "Apply"
-            self._update_test_label_from_signal(False, "Path changed. Click 'Test Connection' or 'Apply & Close'.")
-
+        if path: self.path_edit.setText(path); self._update_test_label_from_signal(False, "Path changed. Click 'Test Connection' or 'Apply & Close'.")
     def _test_connection_and_update_label(self):
         path = self.path_edit.text().strip()
-        if not path:
-            self._update_test_label_from_signal(False, "MATLAB path is empty. Cannot test.")
-            return
-        self.test_status_label.setText("Status: Testing connection, please wait...")
-        self.test_status_label.setStyleSheet("") # Clear specific color
-        QApplication.processEvents()
-        # First, try to set the path. This validates basic existence and emits a signal.
-        if self.matlab_connection.set_matlab_path(path):
-            # If set_matlab_path considers it basically valid, then run the more intensive test.
-            self.matlab_connection.test_connection()
-        # If set_matlab_path returns False, it will have emitted its own error signal.
-
+        if not path: self._update_test_label_from_signal(False, "MATLAB path is empty. Cannot test."); return
+        self.test_status_label.setText("Status: Testing connection, please wait..."); self.test_status_label.setStyleSheet(""); QApplication.processEvents()
+        if self.matlab_connection.set_matlab_path(path): self.matlab_connection.test_connection()
     def _update_test_label_from_signal(self, success, message):
-        status_prefix = "Status: "
-        current_style = "font-weight: bold; padding: 3px;"
+        status_prefix = "Status: "; current_style = "font-weight: bold; padding: 3px;"
         if success:
-            if "path set and appears valid" in message or "detected" in message: status_prefix = "Status: Path seems valid. "
+            if "path set and appears valid" in message or "detected" in message: status_prefix = "Status: Path valid. "
             elif "test successful" in message : status_prefix = "Status: Connected! "
-            current_style += f"color: #2E7D32;" # Dark Green
-        else:
-            status_prefix = "Status: Error. "
-            current_style += f"color: #C62828;" # Dark Red
-        self.test_status_label.setText(status_prefix + message)
-        self.test_status_label.setStyleSheet(current_style)
-        if success and self.matlab_connection.matlab_path: # Update path_edit if auto-detection was successful
-             self.path_edit.setText(self.matlab_connection.matlab_path)
-
+            current_style += f"color: #2E7D32;"
+        else: status_prefix = "Status: Error. "; current_style += f"color: #C62828;"
+        self.test_status_label.setText(status_prefix + message); self.test_status_label.setStyleSheet(current_style)
+        if success and self.matlab_connection.matlab_path: self.path_edit.setText(self.matlab_connection.matlab_path)
     def _apply_settings(self):
         path = self.path_edit.text().strip()
-        # Only set and potentially test if the path has actually changed from what MATLAB connection knows,
-        # or if it's not currently considered connected with that path.
         if self.matlab_connection.matlab_path != path or not self.matlab_connection.connected:
-            if self.matlab_connection.set_matlab_path(path): # This emits a signal
-                if path and not self.matlab_connection.connected: # If path valid but not confirmed connected
-                    self.matlab_connection.test_connection() # Auto-test new path on apply
+            if self.matlab_connection.set_matlab_path(path):
+                if path and not self.matlab_connection.connected: self.matlab_connection.test_connection()
         self.accept()
 
 
@@ -2207,129 +1978,156 @@ class MatlabSettingsDialog(QDialog): # (Icon sizing for buttons)
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.current_file_path = None; self.last_generated_model_path = None
-        self.matlab_connection = MatlabConnection(); self.undo_stack = QUndoStack(self)
-        self.scene = DiagramScene(self.undo_stack, self); self.scene.set_log_function(self.log_message)
+        self.current_file_path = None
+        self.last_generated_model_path = None
+        self.matlab_connection = MatlabConnection()
+        self.undo_stack = QUndoStack(self)
+
+        self.scene = DiagramScene(self.undo_stack, self)
+        self.scene.set_log_function(self.log_message)
         self.scene.modifiedStatusChanged.connect(self.setWindowModified)
         self.scene.modifiedStatusChanged.connect(self._update_window_title)
+
         self.init_ui()
-        self.status_label.setObjectName("StatusLabel"); self.matlab_status_label.setObjectName("MatlabStatusLabel")
-        self._update_matlab_status_display(False, "Initializing. Configure MATLAB or attempt auto-detect.")
+
+        self.status_label.setObjectName("StatusLabel")
+        self.matlab_status_label.setObjectName("MatlabStatusLabel")
+
+        self._update_matlab_status_display(False, "Initializing. Configure MATLAB settings or attempt auto-detect.")
         self.matlab_connection.connectionStatusChanged.connect(self._update_matlab_status_display)
         self.matlab_connection.simulationFinished.connect(self._handle_matlab_modelgen_or_sim_finished)
         self.matlab_connection.codeGenerationFinished.connect(self._handle_matlab_codegen_finished)
-        self._update_window_title(); self.on_new_file(silent=True)
-        self.scene.selectionChanged.connect(self._update_properties_dock); self._update_properties_dock()
+
+        self._update_window_title()
+        self.on_new_file(silent=True)
+
+        self.scene.selectionChanged.connect(self._update_properties_dock)
+        self._update_properties_dock()
+
 
     def init_ui(self):
         self.setGeometry(50, 50, 1650, 1050)
         self.setWindowIcon(get_standard_icon(QStyle.SP_DesktopIcon, "BSM", target_size=QSize(32,32)))
-        self._create_central_widget() # self.view created here
-        self._create_actions() # self.*_icon_size defined here
-        self._create_menus(); self._create_toolbars(); self._create_status_bar(); self._create_docks()
-        self._update_save_actions_enable_state(); self._update_matlab_actions_enabled_state()
-        self._update_undo_redo_actions_enable_state(); self.select_mode_action.trigger()
+        self._create_central_widget()
+        self._create_actions()
+        self._create_menus()
+        self._create_toolbars()
+        self._create_status_bar()
+        self._create_docks()
+        self._update_save_actions_enable_state()
+        self._update_matlab_actions_enabled_state()
+        self._update_undo_redo_actions_enable_state()
+        self.select_mode_action.trigger()
 
     def _create_actions(self):
-        self.menu_icon_size = QSize(16, 16); self.toolbar_icon_size = QSize(22, 22)
+        self.menu_icon_size = QSize(16,16); self.toolbar_icon_size = QSize(22,22)
         self.dialog_button_icon_size = QSize(16,16); self.dock_tool_icon_size = QSize(18,18)
         def _get_icon(std_enum, fb_text, size_cat="toolbar"):
             s = self.toolbar_icon_size
-            if size_cat == "menu": s = self.menu_icon_size
-            elif size_cat == "dialog_btn": s = self.dialog_button_icon_size
-            elif size_cat == "dock_tool": s = self.dock_tool_icon_size
-            return get_standard_icon(std_enum, fb_text, target_size=s)
-        def _safe_enum(name, fallback=None): return getattr(QStyle, name, getattr(QStyle, fallback, QStyle.SP_CustomBase) if fallback else QStyle.SP_CustomBase)
+            if size_cat=="menu":s=self.menu_icon_size
+            elif size_cat=="dialog_btn":s=self.dialog_button_icon_size
+            elif size_cat=="dock_tool":s=self.dock_tool_icon_size
+            return get_standard_icon(std_enum,fb_text,target_size=s)
+        def _safe_enum(name, fallback=None):
+            return getattr(QStyle,name,getattr(QStyle,fallback,QStyle.SP_CustomBase) if fallback else QStyle.SP_CustomBase)
 
-        self.new_action = QAction(_get_icon(QStyle.SP_FileIcon, "New"), "&New", self, shortcut=QKeySequence.New, triggered=self.on_new_file)
-        self.open_action = QAction(_get_icon(QStyle.SP_DialogOpenButton, "Opn"), "&Open...", self, shortcut=QKeySequence.Open, triggered=self.on_open_file)
-        self.save_action = QAction(_get_icon(QStyle.SP_DialogSaveButton, "Sav"), "&Save", self, shortcut=QKeySequence.Save, triggered=self.on_save_file)
-        self.save_as_action = QAction(_get_icon(_safe_enum("SP_DriveHDIcon", "SP_DialogSaveButton"), "As"), "Save &As...", self, shortcut=QKeySequence.SaveAs, triggered=self.on_save_file_as)
-        self.exit_action = QAction(_get_icon(QStyle.SP_DialogCloseButton, "Exit", size_cat="menu"), "E&xit", self, shortcut=QKeySequence.Quit, triggered=self.close)
-        self.undo_action = self.undo_stack.createUndoAction(self, "&Undo"); self.undo_action.setShortcut(QKeySequence.Undo)
-        self.undo_action.setIcon(_get_icon(QStyle.SP_ArrowBack, "Un"))
-        self.redo_action = self.undo_stack.createRedoAction(self, "&Redo"); self.redo_action.setShortcut(QKeySequence.Redo)
-        self.redo_action.setIcon(_get_icon(QStyle.SP_ArrowForward, "Re"))
+        self.new_action = QAction(_get_icon(QStyle.SP_FileIcon,"New"),"&New",self,shortcut=QKeySequence.New,triggered=self.on_new_file)
+        self.open_action = QAction(_get_icon(QStyle.SP_DialogOpenButton,"Opn"),"&Open...",self,shortcut=QKeySequence.Open,triggered=self.on_open_file)
+        self.save_action = QAction(_get_icon(QStyle.SP_DialogSaveButton,"Sav"),"&Save",self,shortcut=QKeySequence.Save,triggered=self.on_save_file)
+        self.save_as_action = QAction(_get_icon(_safe_enum("SP_DriveHDIcon","SP_DialogSaveButton"),"As"),"Save &As...",self,shortcut=QKeySequence.SaveAs,triggered=self.on_save_file_as)
+        self.export_diagram_action = QAction(_get_icon(_safe_enum("SP_DialogSaveButton","SP_DriveHDIcon"),"Img",size_cat="menu"),"Export Diagram As...",self,statusTip="Export the current diagram as an image, SVG, or PDF",triggered=self.on_export_diagram)
+        self.exit_action = QAction(_get_icon(QStyle.SP_DialogCloseButton,"Exit",size_cat="menu"),"E&xit",self,shortcut=QKeySequence.Quit,triggered=self.close)
+        self.undo_action = self.undo_stack.createUndoAction(self,"&Undo"); self.undo_action.setShortcut(QKeySequence.Undo); self.undo_action.setIcon(_get_icon(QStyle.SP_ArrowBack,"Un"))
+        self.redo_action = self.undo_stack.createRedoAction(self,"&Redo"); self.redo_action.setShortcut(QKeySequence.Redo); self.redo_action.setIcon(_get_icon(QStyle.SP_ArrowForward,"Re"))
         self.undo_stack.canUndoChanged.connect(self._update_undo_redo_actions_enable_state)
         self.undo_stack.canRedoChanged.connect(self._update_undo_redo_actions_enable_state)
-        self.select_all_action = QAction(_get_icon(_safe_enum("SP_FileDialogListView", "SP_FileDialogDetailedView"), "All"), "Select &All", self, shortcut=QKeySequence.SelectAll, triggered=self.on_select_all)
-        self.delete_action = QAction(_get_icon(QStyle.SP_TrashIcon, "Del"), "&Delete", self, shortcut=QKeySequence.Delete, triggered=self.on_delete_selected)
+        self.select_all_action = QAction(_get_icon(_safe_enum("SP_FileDialogListView","SP_FileDialogDetailedView"),"All"),"Select &All",self,shortcut=QKeySequence.SelectAll,triggered=self.on_select_all)
+        self.delete_action = QAction(_get_icon(QStyle.SP_TrashIcon,"Del"),"&Delete",self,shortcut=QKeySequence.Delete,triggered=self.on_delete_selected)
         self.mode_action_group = QActionGroup(self); self.mode_action_group.setExclusive(True)
-        self.select_mode_action = QAction(QIcon.fromTheme("edit-select", _get_icon(QStyle.SP_ArrowRight, "Sel")), "Select/Move", self, checkable=True, triggered=lambda: self.scene.set_mode("select"))
-        self.add_state_mode_action = QAction(QIcon.fromTheme("draw-rectangle", _get_icon(QStyle.SP_FileDialogNewFolder, "St")), "Add State", self, checkable=True, triggered=lambda: self.scene.set_mode("state"))
-        self.add_transition_mode_action = QAction(QIcon.fromTheme("draw-connector", _get_icon(_safe_enum("SP_ArrowForward","Tr-arrow"), "Tr")), "Add Transition", self, checkable=True, triggered=lambda: self.scene.set_mode("transition"))
-        self.add_comment_mode_action = QAction(QIcon.fromTheme("insert-text", _get_icon(QStyle.SP_MessageBoxInformation, "Cm")), "Add Comment", self, checkable=True, triggered=lambda: self.scene.set_mode("comment"))
-        for action in [self.select_mode_action, self.add_state_mode_action, self.add_transition_mode_action, self.add_comment_mode_action]: self.mode_action_group.addAction(action)
+        self.select_mode_action = QAction(QIcon.fromTheme("edit-select",_get_icon(QStyle.SP_ArrowRight,"Sel")),"Select/Move",self,checkable=True,triggered=lambda:self.scene.set_mode("select"))
+        self.add_state_mode_action = QAction(QIcon.fromTheme("draw-rectangle",_get_icon(QStyle.SP_FileDialogNewFolder,"St")),"Add State",self,checkable=True,triggered=lambda:self.scene.set_mode("state"))
+        self.add_transition_mode_action = QAction(QIcon.fromTheme("draw-connector",_get_icon(_safe_enum("SP_ArrowForward","Tr-arrow"),"Tr")),"Add Transition",self,checkable=True,triggered=lambda:self.scene.set_mode("transition"))
+        self.add_comment_mode_action = QAction(QIcon.fromTheme("insert-text",_get_icon(QStyle.SP_MessageBoxInformation,"Cm")),"Add Comment",self,checkable=True,triggered=lambda:self.scene.set_mode("comment"))
+        for action in [self.select_mode_action,self.add_state_mode_action,self.add_transition_mode_action,self.add_comment_mode_action]: self.mode_action_group.addAction(action)
         self.select_mode_action.setChecked(True)
-        self.export_simulink_action = QAction(_get_icon(_safe_enum("SP_ArrowUp","Exp"), "->M"), "&Export to Simulink...", self, triggered=self.on_export_simulink)
-        self.run_simulation_action = QAction(_get_icon(QStyle.SP_MediaPlay, "Run"), "&Run Simulation...", self, triggered=self.on_run_simulation)
-        self.generate_code_action = QAction(_get_icon(_safe_enum("SP_DialogSaveButton","GenC"), "Cde"), "Generate &Code (C/C++)...", self, triggered=self.on_generate_code)
-        self.matlab_settings_action = QAction(_get_icon(QStyle.SP_ComputerIcon, "Cfg", size_cat="menu"), "&MATLAB Settings...", self, triggered=self.on_matlab_settings)
-        self.about_action = QAction(_get_icon(QStyle.SP_DialogHelpButton, "?", size_cat="menu"), "&About", self, triggered=self.on_about)
+        self.export_simulink_action = QAction(_get_icon(_safe_enum("SP_ArrowUp","Exp"),"->M"),"&Export to Simulink...",self,triggered=self.on_export_simulink)
+        self.run_simulation_action = QAction(_get_icon(QStyle.SP_MediaPlay,"Run"),"&Run Simulation...",self,triggered=self.on_run_simulation)
+        self.generate_code_action = QAction(_get_icon(_safe_enum("SP_DialogSaveButton","GenC"),"Cde"),"Generate &Code (C/C++)...",self,triggered=self.on_generate_code)
+        self.matlab_settings_action = QAction(_get_icon(QStyle.SP_ComputerIcon,"Cfg",size_cat="menu"),"&MATLAB Settings...",self,triggered=self.on_matlab_settings)
+        self.about_action = QAction(_get_icon(QStyle.SP_DialogHelpButton,"?",size_cat="menu"),"&About",self,triggered=self.on_about)
 
     def _create_menus(self):
         menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("&File"); file_menu.addAction(self.new_action); file_menu.addAction(self.open_action)
-        file_menu.addAction(self.save_action); file_menu.addAction(self.save_as_action); file_menu.addSeparator()
-        file_menu.addAction(self.export_simulink_action); file_menu.addSeparator(); file_menu.addAction(self.exit_action)
-        edit_menu = menu_bar.addMenu("&Edit"); edit_menu.addAction(self.undo_action); edit_menu.addAction(self.redo_action)
+        file_menu = menu_bar.addMenu("&File")
+        file_menu.addAction(self.new_action); file_menu.addAction(self.open_action)
+        file_menu.addAction(self.save_action); file_menu.addAction(self.save_as_action)
+        file_menu.addAction(self.export_diagram_action) # Added Export Diagram action
+        file_menu.addSeparator()
+        file_menu.addAction(self.export_simulink_action)
+        file_menu.addSeparator(); file_menu.addAction(self.exit_action)
+        edit_menu = menu_bar.addMenu("&Edit")
+        edit_menu.addAction(self.undo_action); edit_menu.addAction(self.redo_action)
         edit_menu.addSeparator(); edit_menu.addAction(self.delete_action); edit_menu.addAction(self.select_all_action)
         edit_menu.addSeparator()
-        mode_menu = edit_menu.addMenu(get_standard_icon(QStyle.SP_ToolBarHorizontalExtensionButton, "Mode", target_size=self.menu_icon_size),"Interaction Mode")
+        mode_menu = edit_menu.addMenu(get_standard_icon(QStyle.SP_ToolBarHorizontalExtensionButton,"Mode",target_size=self.menu_icon_size),"Interaction Mode")
         mode_menu.addAction(self.select_mode_action); mode_menu.addAction(self.add_state_mode_action)
         mode_menu.addAction(self.add_transition_mode_action); mode_menu.addAction(self.add_comment_mode_action)
-        sim_menu = menu_bar.addMenu("&Simulation"); sim_menu.addAction(self.run_simulation_action)
-        sim_menu.addAction(self.generate_code_action); sim_menu.addSeparator(); sim_menu.addAction(self.matlab_settings_action)
-        self.view_menu = menu_bar.addMenu("&View"); help_menu = menu_bar.addMenu("&Help"); help_menu.addAction(self.about_action)
+        sim_menu = menu_bar.addMenu("&Simulation")
+        sim_menu.addAction(self.run_simulation_action); sim_menu.addAction(self.generate_code_action)
+        sim_menu.addSeparator(); sim_menu.addAction(self.matlab_settings_action)
+        self.view_menu = menu_bar.addMenu("&View")
+        help_menu = menu_bar.addMenu("&Help"); help_menu.addAction(self.about_action)
 
     def _create_toolbars(self):
-        file_toolbar = self.addToolBar("File"); file_toolbar.setObjectName("FileToolBar"); file_toolbar.setIconSize(self.toolbar_icon_size)
-        file_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); file_toolbar.addAction(self.new_action)
-        file_toolbar.addAction(self.open_action); file_toolbar.addAction(self.save_action)
-        edit_toolbar = self.addToolBar("Edit"); edit_toolbar.setObjectName("EditToolBar"); edit_toolbar.setIconSize(self.toolbar_icon_size)
-        edit_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); edit_toolbar.addAction(self.undo_action)
-        edit_toolbar.addAction(self.redo_action); edit_toolbar.addSeparator(); edit_toolbar.addAction(self.delete_action)
-        tools_tb = self.addToolBar("Interaction Tools"); tools_tb.setObjectName("ToolsToolBar"); tools_tb.setIconSize(self.toolbar_icon_size)
-        tools_tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); tools_tb.addAction(self.select_mode_action)
-        tools_tb.addAction(self.add_state_mode_action); tools_tb.addAction(self.add_transition_mode_action); tools_tb.addAction(self.add_comment_mode_action)
-        sim_toolbar = self.addToolBar("Simulation Tools"); sim_toolbar.setObjectName("SimulationToolBar"); sim_toolbar.setIconSize(self.toolbar_icon_size)
-        sim_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); sim_toolbar.addAction(self.export_simulink_action)
-        sim_toolbar.addAction(self.run_simulation_action); sim_toolbar.addAction(self.generate_code_action)
+        file_toolbar = self.addToolBar("File"); file_toolbar.setObjectName("FileToolBar")
+        file_toolbar.setIconSize(self.toolbar_icon_size); file_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        file_toolbar.addAction(self.new_action); file_toolbar.addAction(self.open_action); file_toolbar.addAction(self.save_action)
+        edit_toolbar = self.addToolBar("Edit"); edit_toolbar.setObjectName("EditToolBar")
+        edit_toolbar.setIconSize(self.toolbar_icon_size); edit_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        edit_toolbar.addAction(self.undo_action); edit_toolbar.addAction(self.redo_action)
+        edit_toolbar.addSeparator(); edit_toolbar.addAction(self.delete_action)
+        tools_tb = self.addToolBar("Interaction Tools"); tools_tb.setObjectName("ToolsToolBar")
+        tools_tb.setIconSize(self.toolbar_icon_size); tools_tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        tools_tb.addAction(self.select_mode_action); tools_tb.addAction(self.add_state_mode_action)
+        tools_tb.addAction(self.add_transition_mode_action); tools_tb.addAction(self.add_comment_mode_action)
+        sim_toolbar = self.addToolBar("Simulation Tools"); sim_toolbar.setObjectName("SimulationToolBar")
+        sim_toolbar.setIconSize(self.toolbar_icon_size); sim_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        sim_toolbar.addAction(self.export_simulink_action); sim_toolbar.addAction(self.run_simulation_action); sim_toolbar.addAction(self.generate_code_action)
 
     def _create_status_bar(self):
-        self.status_bar = QStatusBar(self); self.setStatusBar(self.status_bar); self.status_label = QLabel("Ready")
-        self.status_bar.addWidget(self.status_label, 1); self.matlab_status_label = QLabel("MATLAB: Initializing...")
-        self.matlab_status_label.setToolTip("MATLAB connection status."); self.status_bar.addPermanentWidget(self.matlab_status_label)
+        self.status_bar = QStatusBar(self); self.setStatusBar(self.status_bar)
+        self.status_label = QLabel("Ready"); self.status_bar.addWidget(self.status_label, 1)
+        self.matlab_status_label = QLabel("MATLAB: Initializing..."); self.matlab_status_label.setToolTip("MATLAB connection status.")
+        self.status_bar.addPermanentWidget(self.matlab_status_label)
         self.progress_bar = QProgressBar(self); self.progress_bar.setRange(0,0); self.progress_bar.setVisible(False)
-        self.progress_bar.setMaximumWidth(150); self.progress_bar.setTextVisible(False)
-        self.status_bar.addPermanentWidget(self.progress_bar)
+        self.progress_bar.setMaximumWidth(150); self.progress_bar.setTextVisible(False); self.status_bar.addPermanentWidget(self.progress_bar)
 
     def _create_docks(self):
         self.setDockOptions(QMainWindow.AnimatedDocks | QMainWindow.AllowTabbedDocks | QMainWindow.AllowNestedDocks)
         self.tools_dock = QDockWidget("Tools", self); self.tools_dock.setObjectName("ToolsDock")
         self.tools_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        tools_widget = QWidget(); tools_widget.setObjectName("ToolsDockWidgetContents")
-        tools_layout = QVBoxLayout(tools_widget); tools_layout.setSpacing(10); tools_layout.setContentsMargins(5,5,5,5)
-        mode_gb = QGroupBox("Interaction Modes"); mode_l = QVBoxLayout(); mode_l.setSpacing(5)
-        tb_sel = QToolButton(); tb_sel.setDefaultAction(self.select_mode_action)
-        tb_add_st = QToolButton(); tb_add_st.setDefaultAction(self.add_state_mode_action)
-        tb_trans = QToolButton(); tb_trans.setDefaultAction(self.add_transition_mode_action)
-        tb_add_com = QToolButton(); tb_add_com.setDefaultAction(self.add_comment_mode_action)
-        for btn in [tb_sel, tb_add_st, tb_trans, tb_add_com]:
-            btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); btn.setIconSize(self.dock_tool_icon_size); mode_l.addWidget(btn)
-        mode_gb.setLayout(mode_l); tools_layout.addWidget(mode_gb)
-        drag_gb = QGroupBox("Drag New Elements"); drag_l = QVBoxLayout(); drag_l.setSpacing(5)
-        drag_st = DraggableToolButton("State", "application/x-bsm-tool", "State")
-        drag_st.setIcon(get_standard_icon(QStyle.SP_FileDialogNewFolder, "St", target_size=self.dock_tool_icon_size))
-        drag_init_st = DraggableToolButton("Initial State", "application/x-bsm-tool", "Initial State")
-        drag_init_st.setIcon(get_standard_icon(QStyle.SP_ToolBarHorizontalExtensionButton, "I", target_size=self.dock_tool_icon_size))
-        drag_final_st = DraggableToolButton("Final State", "application/x-bsm-tool", "Final State")
-        drag_final_st.setIcon(get_standard_icon(QStyle.SP_DialogOkButton, "F", target_size=self.dock_tool_icon_size))
-        drag_com = DraggableToolButton("Comment", "application/x-bsm-tool", "Comment")
-        drag_com.setIcon(get_standard_icon(QStyle.SP_MessageBoxInformation, "Cm", target_size=self.dock_tool_icon_size))
-        for btn in [drag_st, drag_init_st, drag_final_st, drag_com]: drag_l.addWidget(btn) # icon size set by QSS for DraggableToolButton
-        drag_gb.setLayout(drag_l); tools_layout.addWidget(drag_gb)
-        tools_layout.addStretch(); self.tools_dock.setWidget(tools_widget)
+        tools_widget_main = QWidget(); tools_widget_main.setObjectName("ToolsDockWidgetContents")
+        tools_main_layout = QVBoxLayout(tools_widget_main); tools_main_layout.setSpacing(10); tools_main_layout.setContentsMargins(5,5,5,5)
+        mode_group_box = QGroupBox("Interaction Modes"); mode_layout = QVBoxLayout(); mode_layout.setSpacing(5)
+        self.toolbox_select_button = QToolButton(); self.toolbox_select_button.setDefaultAction(self.select_mode_action)
+        self.toolbox_add_state_button = QToolButton(); self.toolbox_add_state_button.setDefaultAction(self.add_state_mode_action)
+        self.toolbox_transition_button = QToolButton(); self.toolbox_transition_button.setDefaultAction(self.add_transition_mode_action)
+        self.toolbox_add_comment_button = QToolButton(); self.toolbox_add_comment_button.setDefaultAction(self.add_comment_mode_action)
+        for btn in [self.toolbox_select_button, self.toolbox_add_state_button, self.toolbox_transition_button, self.toolbox_add_comment_button]:
+            btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); btn.setIconSize(self.dock_tool_icon_size); mode_layout.addWidget(btn)
+        mode_group_box.setLayout(mode_layout); tools_main_layout.addWidget(mode_group_box)
+        draggable_group_box = QGroupBox("Drag New Elements"); draggable_layout = QVBoxLayout(); draggable_layout.setSpacing(5)
+        drag_state_btn = DraggableToolButton("State", "application/x-bsm-tool", "State")
+        drag_state_btn.setIcon(get_standard_icon(QStyle.SP_FileDialogNewFolder, "St", target_size=self.dock_tool_icon_size))
+        drag_initial_state_btn = DraggableToolButton("Initial State", "application/x-bsm-tool", "Initial State")
+        drag_initial_state_btn.setIcon(get_standard_icon(QStyle.SP_ToolBarHorizontalExtensionButton, "I", target_size=self.dock_tool_icon_size))
+        drag_final_state_btn = DraggableToolButton("Final State", "application/x-bsm-tool", "Final State")
+        drag_final_state_btn.setIcon(get_standard_icon(QStyle.SP_DialogOkButton, "F", target_size=self.dock_tool_icon_size))
+        drag_comment_btn = DraggableToolButton("Comment", "application/x-bsm-tool", "Comment")
+        drag_comment_btn.setIcon(get_standard_icon(QStyle.SP_MessageBoxInformation, "Cm", target_size=self.dock_tool_icon_size))
+        for btn in [drag_state_btn, drag_initial_state_btn, drag_final_state_btn, drag_comment_btn]: draggable_layout.addWidget(btn)
+        draggable_group_box.setLayout(draggable_layout); tools_main_layout.addWidget(draggable_group_box)
+        tools_main_layout.addStretch(); self.tools_dock.setWidget(tools_widget_main)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.tools_dock); self.view_menu.addAction(self.tools_dock.toggleViewAction())
         self.log_dock = QDockWidget("Output Log", self); self.log_dock.setObjectName("LogDock")
         self.log_dock.setAllowedAreas(Qt.AllDockWidgetAreas); self.log_output = QTextEdit()
@@ -2338,15 +2136,15 @@ class MainWindow(QMainWindow):
         self.view_menu.addAction(self.log_dock.toggleViewAction())
         self.properties_dock = QDockWidget("Element Properties", self); self.properties_dock.setObjectName("PropertiesDock")
         self.properties_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
-        props_widget = QWidget(); props_widget.setObjectName("PropertiesDockWidgetContents")
-        self.properties_layout = QVBoxLayout(props_widget); self.properties_layout.setSpacing(8); self.properties_layout.setContentsMargins(5,5,5,5)
+        properties_widget_main = QWidget(); properties_widget_main.setObjectName("PropertiesDockWidgetContents")
+        self.properties_layout = QVBoxLayout(properties_widget_main); self.properties_layout.setSpacing(8); self.properties_layout.setContentsMargins(5,5,5,5)
         self.properties_editor_label = QLabel("<i>No item selected.</i>"); self.properties_editor_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.properties_editor_label.setWordWrap(True); self.properties_editor_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.properties_edit_button = QPushButton(get_standard_icon(QStyle.SP_DialogApplyButton,"Edt", target_size=self.dialog_button_icon_size), " Edit Details...")
         self.properties_edit_button.setIconSize(self.dialog_button_icon_size); self.properties_edit_button.setEnabled(False)
         self.properties_edit_button.clicked.connect(self._on_edit_selected_item_properties_from_dock)
         self.properties_layout.addWidget(self.properties_editor_label, 1); self.properties_layout.addWidget(self.properties_edit_button)
-        props_widget.setLayout(self.properties_layout); self.properties_dock.setWidget(props_widget)
+        properties_widget_main.setLayout(self.properties_layout); self.properties_dock.setWidget(properties_widget_main)
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock); self.view_menu.addAction(self.properties_dock.toggleViewAction())
 
     def _create_central_widget(self):
@@ -2364,7 +2162,7 @@ class MainWindow(QMainWindow):
                 return line1[:max_chars] + "&hellip;" if len(line1) > max_chars or '\n' in esc_txt else line1
             rows_html = ""; color_val = props.get('color'); def_bg = COLOR_ITEM_STATE_DEFAULT_BG
             if isinstance(item, GraphicsTransitionItem): def_bg = COLOR_ITEM_TRANSITION_DEFAULT
-            elif isinstance(item, GraphicsCommentItem): def_bg = COLOR_ITEM_COMMENT_BG # not used for color prop
+            elif isinstance(item, GraphicsCommentItem): def_bg = COLOR_ITEM_COMMENT_BG
             eff_color = color_val if color_val else def_bg; q_color = QColor(eff_color)
             txt_on_color = COLOR_TEXT_PRIMARY if q_color.lightnessF() > 0.5 else COLOR_TEXT_ON_ACCENT
             color_disp = html.escape(color_val) if color_val else f"<i style='color:{COLOR_TEXT_SECONDARY};'>Default ({def_bg})</i>"
@@ -2394,24 +2192,27 @@ class MainWindow(QMainWindow):
             elif isinstance(item, GraphicsCommentItem):
                 rows_html += f"<tr><td {td_style}>Text:</td><td>{fmt_txt(props['text'], 60)}</td></tr>"
             else: rows_html = "<tr><td>Unknown Item Type</td></tr>"
-            html_content = f"""<div style='font-family:"{APP_FONT_FAMILY}";font-size:9pt;line-height:1.5;'>
-                <h4 style='margin:0 0 8px 0;padding-bottom:4px;color:{COLOR_ACCENT_PRIMARY};border-bottom:1px solid {COLOR_BORDER_LIGHT};'>Type: {item_type_name}</h4>
-                <table style='width:100%;border-collapse:collapse;table-layout:fixed;'><col style="width:70px;"/><col/>{rows_html}</table></div>"""
+            html_content = (
+                f"<div style='font-family:\"{APP_FONT_FAMILY}\";font-size:9pt;line-height:1.5;'>"
+                f"<h4 style='margin:0 0 8px 0;padding-bottom:4px;color:{COLOR_ACCENT_PRIMARY};border-bottom:1px solid {COLOR_BORDER_LIGHT};'>Type: {item_type_name}</h4>"
+                f"<table style='width:100%;border-collapse:collapse;table-layout:fixed;'><col style=\"width:70px;\"/><col/>{rows_html}</table></div>"
+            )
         elif len(selected_items) > 1:
             html_content = f"<i><b>{len(selected_items)} items selected.</b><br>Select a single item to view/edit properties.</i>"
             item_type_tooltip = f"{len(selected_items)} items"
         else:
             html_content = f"<i>No item selected.</i><br/><small style='color:{COLOR_TEXT_SECONDARY};'>Click an item or use tools to add new items.</small>"
-        self.properties_editor_label.setText(html_content); self.properties_edit_button.setEnabled(edit_enabled)
-        self.properties_edit_button.setToolTip(f"Edit details of selected {item_type_tooltip}" if edit_enabled else "Select single item to edit")
+        self.properties_editor_label.setText(html_content)
+        self.properties_edit_button.setEnabled(edit_enabled)
+        self.properties_edit_button.setToolTip(f"Edit details of the selected {item_type_tooltip}" if edit_enabled else "Select a single item to enable editing")
 
     def _on_edit_selected_item_properties_from_dock(self):
-        sel = self.scene.selectedItems();
-        if len(sel) == 1: self.scene.edit_item_properties(sel[0])
+        selected_items = self.scene.selectedItems()
+        if len(selected_items) == 1: self.scene.edit_item_properties(selected_items[0])
 
-    def log_message(self, message: str):
-        ts = QTime.currentTime().toString('hh:mm:ss.zzz')
-        self.log_output.append(f"<span style='color:{COLOR_TEXT_SECONDARY};'>[{ts}]</span> {html.escape(message)}")
+    def log_message(self,message:str):
+        timestamp=QTime.currentTime().toString('hh:mm:ss.zzz')
+        self.log_output.append(f"<span style='color:{COLOR_TEXT_SECONDARY};'>[{timestamp}]</span> {html.escape(message)}")
         self.log_output.verticalScrollBar().setValue(self.log_output.verticalScrollBar().maximum())
         self.status_label.setText(message.split('\n')[0][:120])
 
@@ -2426,68 +2227,78 @@ class MainWindow(QMainWindow):
         self.undo_action.setText(f"&Undo {self.undo_stack.undoText()}" if self.undo_stack.canUndo() else "&Undo")
         self.redo_action.setText(f"&Redo {self.undo_stack.redoText()}" if self.undo_stack.canRedo() else "&Redo")
 
-    def _update_matlab_status_display(self, connected, message):
+    def _update_matlab_status_display(self,connected,message):
         text = f"MATLAB: {'Connected' if connected else 'Not Connected'}"
-        tooltip = f"MATLAB Status: {message}"; self.matlab_status_label.setText(text); self.matlab_status_label.setToolTip(tooltip)
+        tooltip = f"MATLAB Status: {message}"
+        self.matlab_status_label.setText(text); self.matlab_status_label.setToolTip(tooltip)
         style = "font-weight:bold;padding:0px 5px;" + (f"color:#2E7D32;" if connected else f"color:#C62828;")
-        self.matlab_status_label.setStyleSheet(style); self.log_message(f"MATLAB Conn: {message}")
+        self.matlab_status_label.setStyleSheet(style)
+        self.log_message(f"MATLAB Conn: {message}")
         self._update_matlab_actions_enabled_state()
 
     def _update_matlab_actions_enabled_state(self):
         conn = self.matlab_connection.connected
-        self.export_simulink_action.setEnabled(conn); self.run_simulation_action.setEnabled(conn); self.generate_code_action.setEnabled(conn)
+        self.export_simulink_action.setEnabled(conn); self.run_simulation_action.setEnabled(conn)
+        self.generate_code_action.setEnabled(conn)
 
-    def _start_matlab_operation(self, op_name):
-        self.log_message(f"MATLAB Op: {op_name} starting..."); self.status_label.setText(f"Running: {op_name}...")
+    def _start_matlab_operation(self,op_name):
+        self.log_message(f"MATLAB Op: {op_name} starting...")
+        self.status_label.setText(f"Running: {op_name}...")
         self.progress_bar.setVisible(True); self.set_ui_enabled_for_matlab_op(False)
     def _finish_matlab_operation(self):
         self.progress_bar.setVisible(False); self.status_label.setText("Ready")
         self.set_ui_enabled_for_matlab_op(True); self.log_message("MATLAB Op: Finished processing.")
-    def set_ui_enabled_for_matlab_op(self, enabled: bool):
+    def set_ui_enabled_for_matlab_op(self,enabled:bool):
         self.menuBar().setEnabled(enabled)
         for child in self.findChildren(QToolBar): child.setEnabled(enabled)
         if self.centralWidget(): self.centralWidget().setEnabled(enabled)
-        for name in ["ToolsDock", "PropertiesDock", "LogDock"]:
-            dock = self.findChild(QDockWidget, name);
+        for name in ["ToolsDock","PropertiesDock","LogDock"]:
+            dock = self.findChild(QDockWidget, name)
             if dock: dock.setEnabled(enabled)
 
-    def _handle_matlab_modelgen_or_sim_finished(self, success, message, data):
+    def _handle_matlab_modelgen_or_sim_finished(self,success,message,data):
         self._finish_matlab_operation()
         self.log_message(f"MATLAB Result ({'OK' if success else 'FAIL'}): {message}")
         if success:
             if "Model generation" in message and data:
                  self.last_generated_model_path = data
-                 QMessageBox.information(self, "Simulink Model Generation", f"Simulink model generated:\n{data}")
-            elif "Simulation" in message: QMessageBox.information(self, "Simulation Complete", f"MATLAB simulation finished.\n{message}")
-        else: QMessageBox.warning(self, "MATLAB Operation Failed", message)
+                 QMessageBox.information(self,"Simulink Model Generation",f"Simulink model generated:\n{data}")
+            elif "Simulation" in message:
+                 QMessageBox.information(self,"Simulation Complete",f"MATLAB simulation finished.\n{message}")
+        else: QMessageBox.warning(self,"MATLAB Operation Failed",message)
 
-    def _handle_matlab_codegen_finished(self, success, message, output_dir):
+    def _handle_matlab_codegen_finished(self,success,message,output_dir):
         self._finish_matlab_operation()
         self.log_message(f"MATLAB Code Gen ({'OK' if success else 'FAIL'}): {message}")
         if success and output_dir:
-            msg_box = QMessageBox(self); msg_box.setIcon(QMessageBox.Information); msg_box.setWindowTitle("Code Generation Successful")
-            msg_box.setTextFormat(Qt.RichText); abs_dir = os.path.abspath(output_dir)
+            msg_box = QMessageBox(self); msg_box.setIcon(QMessageBox.Information)
+            msg_box.setWindowTitle("Code Generation Successful"); msg_box.setTextFormat(Qt.RichText)
+            abs_dir = os.path.abspath(output_dir)
             msg_box.setText(f"Code generation done.<br/>Output: <a href='file:///{abs_dir}'>{abs_dir}</a>")
             msg_box.setTextInteractionFlags(Qt.TextBrowserInteraction)
-            open_btn = msg_box.addButton("Open Directory", QMessageBox.ActionRole)
+            open_btn = msg_box.addButton("Open Directory",QMessageBox.ActionRole)
             msg_box.addButton(QMessageBox.Ok); msg_box.exec_()
             if msg_box.clickedButton() == open_btn:
                 try: QDesktopServices.openUrl(QUrl.fromLocalFile(abs_dir))
-                except Exception as e: self.log_message(f"Error opening dir {abs_dir}: {e}"); QMessageBox.warning(self, "Error", f"Could not open directory:\n{e}")
-        elif not success: QMessageBox.warning(self, "Code Generation Failed", message)
+                except Exception as e:
+                    self.log_message(f"Error opening dir {abs_dir}: {e}")
+                    QMessageBox.warning(self,"Error",f"Could not open directory:\n{e}")
+        elif not success: QMessageBox.warning(self,"Code Generation Failed",message)
 
-    def _prompt_save_if_dirty(self) -> bool:
+    def _prompt_save_if_dirty(self)->bool:
         if not self.isWindowModified(): return True
         name = os.path.basename(self.current_file_path) if self.current_file_path else "Untitled"
-        reply = QMessageBox.question(self, "Save Changes?", f"Document '{name}' has unsaved changes.\nSave before continuing?",
-                                     QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
+        reply = QMessageBox.question(self,"Save Changes?",
+                                     f"Document '{name}' has unsaved changes.\nDo you want to save them before continuing?",
+                                     QMessageBox.Save|QMessageBox.Discard|QMessageBox.Cancel,QMessageBox.Save)
         if reply == QMessageBox.Save: return self.on_save_file()
         return reply != QMessageBox.Cancel
 
-    def on_new_file(self, silent=False):
+    def on_new_file(self,silent=False):
         if not silent and not self._prompt_save_if_dirty(): return False
-        self.scene.clear(); self.scene.setSceneRect(0,0,6000,4500); self.current_file_path = None
-        self.last_generated_model_path = None; self.undo_stack.clear(); self.scene.set_dirty(False)
+        self.scene.clear(); self.scene.setSceneRect(0,0,6000,4500)
+        self.current_file_path=None; self.last_generated_model_path=None
+        self.undo_stack.clear(); self.scene.set_dirty(False)
         self._update_window_title(); self._update_undo_redo_actions_enable_state()
         if not silent: self.log_message("New diagram created."); self.view.resetTransform()
         self.view.centerOn(self.scene.sceneRect().center()); self.select_mode_action.trigger(); return True
@@ -2495,146 +2306,173 @@ class MainWindow(QMainWindow):
     def on_open_file(self):
         if not self._prompt_save_if_dirty(): return
         start_dir = os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open BSM File", start_dir, FILE_FILTER)
+        file_path,_ = QFileDialog.getOpenFileName(self,"Open BSM File",start_dir,FILE_FILTER)
         if file_path:
-            self.log_message(f"Opening: {file_path}")
+            self.log_message(f"Attempting to open file: {file_path}")
             if self._load_from_path(file_path):
-                self.current_file_path = file_path; self.last_generated_model_path = None
-                self.undo_stack.clear(); self.scene.set_dirty(False); self._update_window_title()
-                self._update_undo_redo_actions_enable_state(); self.log_message(f"Opened: {file_path}")
-                bounds = self.scene.itemsBoundingRect()
-                if not bounds.isEmpty(): self.view.fitInView(bounds.adjusted(-50, -50, 50, 50), Qt.KeepAspectRatio)
+                self.current_file_path=file_path; self.last_generated_model_path=None
+                self.undo_stack.clear(); self.scene.set_dirty(False)
+                self._update_window_title(); self._update_undo_redo_actions_enable_state()
+                self.log_message(f"Successfully opened: {file_path}")
+                items_bounds = self.scene.itemsBoundingRect()
+                if not items_bounds.isEmpty():
+                    self.view.fitInView(items_bounds.adjusted(-50,-50,50,50),Qt.KeepAspectRatio)
                 else: self.view.resetTransform(); self.view.centerOn(self.scene.sceneRect().center())
-            else: QMessageBox.critical(self, "Error Opening", f"Could not load file: {file_path}"); self.log_message(f"Failed to open: {file_path}")
+            else:
+                QMessageBox.critical(self,"Error Opening File",f"Could not load or parse file: {file_path}")
+                self.log_message(f"Failed to open file: {file_path}")
 
-    def _load_from_path(self, file_path):
+    def _load_from_path(self,file_path):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f: data = json.load(f)
-            if not isinstance(data, dict) or ('states' not in data or 'transitions' not in data):
-                self.log_message(f"Error: Invalid BSM format in {file_path}."); return False
+            with open(file_path,'r',encoding='utf-8') as f: data=json.load(f)
+            if not isinstance(data,dict) or ('states' not in data or 'transitions' not in data):
+                self.log_message(f"Error: Invalid BSM file format in {file_path}."); return False
             self.scene.load_diagram_data(data); return True
-        except Exception as e: self.log_message(f"Error loading {file_path}: {type(e).__name__}: {e}"); return False
+        except Exception as e:
+            self.log_message(f"Unexpected error loading file {file_path}: {type(e).__name__}: {e}"); return False
 
-    def on_save_file(self) -> bool: return self._save_to_path(self.current_file_path) if self.current_file_path else self.on_save_file_as()
-    def on_save_file_as(self) -> bool:
-        start_path = self.current_file_path if self.current_file_path else os.path.join(QDir.homePath(), "untitled" + FILE_EXTENSION)
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save BSM File As", start_path, FILE_FILTER)
+    def on_save_file(self)->bool:
+        return self._save_to_path(self.current_file_path) if self.current_file_path else self.on_save_file_as()
+
+    def on_save_file_as(self)->bool:
+        start_path = self.current_file_path if self.current_file_path else os.path.join(QDir.homePath(),"untitled"+FILE_EXTENSION)
+        file_path,_ = QFileDialog.getSaveFileName(self,"Save BSM File As",start_path,FILE_FILTER)
         if file_path:
-            if not file_path.lower().endswith(FILE_EXTENSION): file_path += FILE_EXTENSION
-            if self._save_to_path(file_path): self.current_file_path = file_path; self.scene.set_dirty(False); self._update_window_title(); return True
+            if not file_path.lower().endswith(FILE_EXTENSION): file_path+=FILE_EXTENSION
+            if self._save_to_path(file_path):
+                self.current_file_path=file_path; self.scene.set_dirty(False)
+                self._update_window_title(); return True
         return False
 
-    def _save_to_path(self, file_path) -> bool:
-        sf = QSaveFile(file_path)
-        if not sf.open(QIODevice.WriteOnly | QIODevice.Text):
-            err = sf.errorString(); self.log_message(f"Error opening save file {file_path}: {err}")
-            QMessageBox.critical(self, "Save Error", f"Failed to open file for saving:\n{err}"); return False
+    def _save_to_path(self,file_path)->bool:
+        save_file = QSaveFile(file_path)
+        if not save_file.open(QIODevice.WriteOnly|QIODevice.Text):
+            error_str=save_file.errorString(); self.log_message(f"Error opening save file {file_path}: {error_str}")
+            QMessageBox.critical(self,"Save Error",f"Failed to open file for saving:\n{error_str}"); return False
         try:
-            data = self.scene.get_diagram_data(); json_data = json.dumps(data, indent=4, ensure_ascii=False)
-            if sf.write(json_data.encode('utf-8')) == -1 or not sf.commit():
-                err = sf.errorString(); self.log_message(f"Error writing/committing {file_path}: {err}")
-                QMessageBox.critical(self, "Save Error", f"Failed to save file:\n{err}"); sf.cancelWriting(); return False
-            self.log_message(f"File saved: {file_path}"); return True
+            data=self.scene.get_diagram_data(); json_data=json.dumps(data,indent=4,ensure_ascii=False)
+            if save_file.write(json_data.encode('utf-8'))==-1 or not save_file.commit():
+                error_str=save_file.errorString(); self.log_message(f"Error writing/committing {file_path}: {error_str}")
+                QMessageBox.critical(self,"Save Error",f"Failed to save file:\n{error_str}"); save_file.cancelWriting(); return False
+            self.log_message(f"File saved successfully: {file_path}"); return True
         except Exception as e:
-            self.log_message(f"Error saving {file_path}: {type(e).__name__}: {e}")
-            QMessageBox.critical(self, "Save Error", f"Error during saving:\n{e}"); sf.cancelWriting(); return False
+            self.log_message(f"Error preparing data or writing to save file {file_path}: {type(e).__name__}: {e}")
+            QMessageBox.critical(self,"Save Error",f"An error occurred during saving:\n{str(e)}"); save_file.cancelWriting(); return False
 
     def on_select_all(self): self.scene.select_all()
     def on_delete_selected(self): self.scene.delete_selected_items()
 
+    def on_export_diagram(self): # NEW METHOD
+        if not self.scene.items(): QMessageBox.information(self,"Empty Diagram","There is nothing to export."); return
+        default_filename="diagram_export"
+        if self.current_file_path: base_name=os.path.splitext(os.path.basename(self.current_file_path))[0]; default_filename=base_name+"_diagram"
+        filters = ["PNG Image (*.png)", "JPEG Image (*.jpg *.jpeg)", "Scalable Vector Graphics (*.svg)", "PDF Document (*.pdf)", "All Files (*)"]
+        file_path,selected_filter = QFileDialog.getSaveFileName(self,"Export Diagram As",os.path.join(os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath(),default_filename),";;".join(filters))
+        if not file_path: return
+        if selected_filter == filters[0] and not file_path.lower().endswith(".png"): file_path += ".png"
+        elif selected_filter == filters[1] and not (file_path.lower().endswith(".jpg") or file_path.lower().endswith(".jpeg")): file_path += ".jpg"
+        elif selected_filter == filters[2] and not file_path.lower().endswith(".svg"): file_path += ".svg"
+        elif selected_filter == filters[3] and not file_path.lower().endswith(".pdf"): file_path += ".pdf"
+        self.log_message(f"Exporting diagram to: {file_path}"); QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            items_rect = self.scene.itemsBoundingRect()
+            if items_rect.isEmpty(): QMessageBox.warning(self,"Export Error","Cannot determine diagram bounds."); QApplication.restoreOverrideCursor(); return # Added cursor restore
+            padding = 50; target_rect = items_rect.adjusted(-padding, -padding, padding, padding)
+            if file_path.lower().endswith((".png",".jpg",".jpeg")):
+                scale_factor = 2.0; img_width = int(target_rect.width()*scale_factor); img_height = int(target_rect.height()*scale_factor)
+                min_dim = 500
+                if img_width < min_dim and target_rect.width() > 1e-6 : # Avoid division by zero
+                    img_width = min_dim; img_height = int(min_dim * (target_rect.height() / target_rect.width()))
+                elif img_height < min_dim and target_rect.height() > 1e-6 :
+                    img_height = min_dim; img_width = int(min_dim * (target_rect.width() / target_rect.height()))
+                if img_width <=0 or img_height <=0: img_width=min_dim; img_height=min_dim
+                image = QImage(img_width, img_height, QImage.Format_ARGB32_Premultiplied)
+                image.fill(Qt.transparent if file_path.lower().endswith(".png") else Qt.white)
+                painter = QPainter(image); painter.setRenderHints(QPainter.Antialiasing|QPainter.TextAntialiasing|QPainter.SmoothPixmapTransform)
+                if not (file_path.lower().endswith(".png") and self.scene.backgroundBrush().style()==Qt.NoBrush): painter.fillRect(image.rect(), self.scene.backgroundBrush())
+                self.scene.render(painter, QRectF(image.rect()), target_rect); painter.end()
+                if not image.save(file_path): raise IOError(f"Failed to save image to {file_path}")
+            elif file_path.lower().endswith(".svg"):
+                svg_generator=QSvgGenerator(); svg_generator.setFileName(file_path)
+                svg_generator.setSize(QSize(int(target_rect.width()),int(target_rect.height()))); svg_generator.setViewBox(target_rect)
+                svg_generator.setTitle("BSM Diagram"); svg_generator.setDescription(f"Exported from {APP_NAME}")
+                painter=QPainter(svg_generator); self.scene.render(painter); painter.end()
+            elif file_path.lower().endswith(".pdf"):
+                printer=QPrinter(QPrinter.HighResolution); printer.setOutputFormat(QPrinter.PdfFormat); printer.setOutputFileName(file_path)
+                printer.setPageSize(QPageSize(QPageSize.A4)); printer.setPageMargins(15,15,15,15,QPrinter.Millimeter) # QPrinter.Millimeter
+                painter=QPainter(printer); page_rect_painter=painter.viewport()
+                x_scale = page_rect_painter.width()/target_rect.width() if target_rect.width() > 1e-6 else 1.0 # Avoid division by zero
+                y_scale = page_rect_painter.height()/target_rect.height() if target_rect.height() > 1e-6 else 1.0
+                scale = min(x_scale,y_scale)
+                painter.save(); painter.translate(page_rect_painter.x()+(page_rect_painter.width()-target_rect.width()*scale)/2, page_rect_painter.y()+(page_rect_painter.height()-target_rect.height()*scale)/2)
+                painter.scale(scale,scale); painter.translate(-target_rect.topLeft()); self.scene.render(painter); painter.restore(); painter.end()
+            self.log_message(f"Diagram successfully exported to {file_path}"); QMessageBox.information(self,"Export Successful",f"Diagram exported to:\n{file_path}")
+        except Exception as e: self.log_message(f"Error exporting diagram: {e}"); QMessageBox.critical(self,"Export Error",f"Could not export diagram:\n{str(e)}")
+        finally: QApplication.restoreOverrideCursor()
+
     def on_export_simulink(self):
-        if not self.matlab_connection.connected: QMessageBox.warning(self, "MATLAB Not Connected", "Configure MATLAB in Simulation menu."); return
-        dlg = QDialog(self); dlg.setWindowTitle("Export to Simulink"); dlg.setWindowIcon(get_standard_icon(QStyle.SP_ArrowUp, "->M", target_size=self.dialog_button_icon_size))
-        layout = QFormLayout(dlg); layout.setSpacing(8); layout.setContentsMargins(10,10,10,10)
-        name_def = "BSM_Model"; btn_icon_s = self.dialog_button_icon_size
-        if self.current_file_path:
-            base = os.path.splitext(os.path.basename(self.current_file_path))[0]
-            name_def = "".join(c if c.isalnum() or c=='_' else '_' for c in base)
-            if not name_def or not name_def[0].isalpha(): name_def = "Model_" + name_def
-        name_edit = QLineEdit(name_def); name_edit.setPlaceholderText("Simulink model name")
-        layout.addRow("Model Name:", name_edit); def_out = os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath()
-        out_edit = QLineEdit(def_out)
-        browse = QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon,"Brw", target_size=btn_icon_s)," Browse..."); browse.setIconSize(btn_icon_s)
-        browse.clicked.connect(lambda: out_edit.setText(QFileDialog.getExistingDirectory(dlg, "Select Output Dir", out_edit.text()) or out_edit.text()))
-        dir_l = QHBoxLayout(); dir_l.addWidget(out_edit, 1); dir_l.addWidget(browse); layout.addRow("Output Dir:", dir_l)
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel); btns.accepted.connect(dlg.accept); btns.rejected.connect(dlg.reject)
-        layout.addRow(btns); dlg.setMinimumWidth(450)
-        if dlg.exec_() == QDialog.Accepted:
-            name = name_edit.text().strip(); out_dir = out_edit.text().strip()
-            if not name or not out_dir: QMessageBox.warning(self, "Input Error", "Model name and output directory required."); return
-            if not name[0].isalpha() or not all(c.isalnum() or c == '_' for c in name): QMessageBox.warning(self, "Invalid Name", "Model name: letter start, alphanumeric/underscores."); return
-            if not os.path.exists(out_dir):
-                try: os.makedirs(out_dir, exist_ok=True)
-                except OSError as e: QMessageBox.critical(self, "Directory Error", f"Could not create dir:\n{e}"); return
-            data = self.scene.get_diagram_data()
-            if not data['states']: QMessageBox.information(self, "Empty Diagram", "No states to export."); return
-            self._start_matlab_operation(f"Exporting '{name}' to Simulink")
-            self.matlab_connection.generate_simulink_model(data['states'], data['transitions'], out_dir, name)
+        if not self.matlab_connection.connected:QMessageBox.warning(self,"MATLAB Not Connected","Configure MATLAB in Simulation menu.");return
+        dlg=QDialog(self);dlg.setWindowTitle("Export to Simulink");dlg.setWindowIcon(get_standard_icon(QStyle.SP_ArrowUp,"->M",target_size=self.dialog_button_icon_size));layout=QFormLayout(dlg);layout.setSpacing(8);layout.setContentsMargins(10,10,10,10)
+        name_def="BSM_Model";btn_icon_s=self.dialog_button_icon_size
+        if self.current_file_path:base=os.path.splitext(os.path.basename(self.current_file_path))[0];name_def="".join(c if c.isalnum() or c=='_' else '_' for c in base);
+                                 if not name_def or not name_def[0].isalpha():name_def="Model_"+name_def
+        name_edit=QLineEdit(name_def);name_edit.setPlaceholderText("Simulink model name");layout.addRow("Model Name:",name_edit)
+        def_out=os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath();output_dir_edit=QLineEdit(def_out)
+        browse_btn=QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon,"Brw",target_size=btn_icon_s)," Browse...");browse_btn.setIconSize(btn_icon_s)
+        browse_btn.clicked.connect(lambda:output_dir_edit.setText(QFileDialog.getExistingDirectory(dlg,"Select Output Dir",output_dir_edit.text()) or output_dir_edit.text()))
+        dir_layout=QHBoxLayout();dir_layout.addWidget(output_dir_edit,1);dir_layout.addWidget(browse_btn);layout.addRow("Output Dir:",dir_layout)
+        buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel);buttons.accepted.connect(dlg.accept);buttons.rejected.connect(dlg.reject);layout.addRow(buttons);dlg.setMinimumWidth(450)
+        if dlg.exec_()==QDialog.Accepted:
+            model_name=name_edit.text().strip();output_dir=output_dir_edit.text().strip()
+            if not model_name or not output_dir:QMessageBox.warning(self,"Input Error","Model name and output directory required.");return
+            if not model_name[0].isalpha() or not all(c.isalnum() or c=='_' for c in model_name):QMessageBox.warning(self,"Invalid Model Name","Model name: letter start, alphanumeric/underscores.");return
+            if not os.path.exists(output_dir):
+                try:os.makedirs(output_dir,exist_ok=True)
+                except OSError as e:QMessageBox.critical(self,"Directory Error",f"Could not create directory:\n{e}");return
+            diagram_data=self.scene.get_diagram_data()
+            if not diagram_data['states']:QMessageBox.information(self,"Empty Diagram","Cannot export: no states found.");return
+            self._start_matlab_operation(f"Exporting '{model_name}' to Simulink");self.matlab_connection.generate_simulink_model(diagram_data['states'],diagram_data['transitions'],output_dir,model_name)
 
     def on_run_simulation(self):
-        if not self.matlab_connection.connected: QMessageBox.warning(self, "MATLAB Not Connected", "MATLAB not connected."); return
-        def_dir = os.path.dirname(self.last_generated_model_path) if self.last_generated_model_path else \
-                  (os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath())
-        path, _ = QFileDialog.getOpenFileName(self, "Select Simulink Model", def_dir, "Simulink Models (*.slx);;All Files (*)")
-        if not path: return
-        self.last_generated_model_path = path
-        time, ok = QInputDialog.getDouble(self, "Simulation Time", "Stop time (s):", 10.0, 0.001, 86400.0, 3)
-        if not ok: return
-        self._start_matlab_operation(f"Simulating '{os.path.basename(path)}'")
-        self.matlab_connection.run_simulation(path, time)
+        if not self.matlab_connection.connected:QMessageBox.warning(self,"MATLAB Not Connected","MATLAB not connected.");return
+        default_model_dir=os.path.dirname(self.last_generated_model_path) if self.last_generated_model_path else (os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath())
+        model_path,_=QFileDialog.getOpenFileName(self,"Select Simulink Model to Simulate",default_model_dir,"Simulink Models (*.slx);;All Files (*)")
+        if not model_path:return
+        self.last_generated_model_path=model_path;sim_time,ok=QInputDialog.getDouble(self,"Simulation Time","Simulation stop time (seconds):",10.0,0.001,86400.0,3)
+        if not ok:return
+        self._start_matlab_operation(f"Running Simulink simulation for '{os.path.basename(model_path)}'");self.matlab_connection.run_simulation(model_path,sim_time)
 
     def on_generate_code(self):
-        if not self.matlab_connection.connected: QMessageBox.warning(self, "MATLAB Not Connected", "MATLAB not connected."); return
-        def_dir = os.path.dirname(self.last_generated_model_path) if self.last_generated_model_path else \
-                  (os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath())
-        path, _ = QFileDialog.getOpenFileName(self, "Select Simulink Model for Code Gen", def_dir, "Simulink Models (*.slx);;All Files (*)")
-        if not path: return
-        self.last_generated_model_path = path; btn_icon_s = self.dialog_button_icon_size
-        dlg = QDialog(self); dlg.setWindowTitle("Code Generation Options"); dlg.setWindowIcon(get_standard_icon(QStyle.SP_DialogSaveButton, "Cde", target_size=btn_icon_s))
-        layout = QFormLayout(dlg); layout.setSpacing(8); layout.setContentsMargins(10,10,10,10)
-        lang = QComboBox(); lang.addItems(["C", "C++"]); lang.setCurrentText("C++"); layout.addRow("Target Language:", lang)
-        def_out = os.path.dirname(path); out_edit = QLineEdit(def_out); out_edit.setPlaceholderText("Base directory for code")
-        browse = QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon, "Brw", target_size=btn_icon_s)," Browse..."); browse.setIconSize(btn_icon_s)
-        browse.clicked.connect(lambda: out_edit.setText(QFileDialog.getExistingDirectory(dlg, "Select Base Output Dir", out_edit.text()) or out_edit.text()))
-        dir_l = QHBoxLayout(); dir_l.addWidget(out_edit, 1); dir_l.addWidget(browse); layout.addRow("Base Output Dir:", dir_l)
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel); btns.accepted.connect(dlg.accept); btns.rejected.connect(dlg.reject)
-        layout.addRow(btns); dlg.setMinimumWidth(450)
-        if dlg.exec_() == QDialog.Accepted:
-            language = lang.currentText(); out_base = out_edit.text().strip()
-            if not out_base: QMessageBox.warning(self, "Input Error", "Base output directory required."); return
-            if not os.path.exists(out_base):
-                 try: os.makedirs(out_base, exist_ok=True)
-                 except OSError as e: QMessageBox.critical(self, "Directory Error", f"Could not create dir:\n{e}"); return
-            self._start_matlab_operation(f"Generating {language} code for '{os.path.basename(path)}'")
-            self.matlab_connection.generate_code(path, language, out_base)
+        if not self.matlab_connection.connected:QMessageBox.warning(self,"MATLAB Not Connected","MATLAB not connected.");return
+        default_model_dir=os.path.dirname(self.last_generated_model_path) if self.last_generated_model_path else (os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath())
+        model_path,_=QFileDialog.getOpenFileName(self,"Select Simulink Model for Code Generation",default_model_dir,"Simulink Models (*.slx);;All Files (*)")
+        if not model_path:return
+        self.last_generated_model_path=model_path;btn_icon_s=self.dialog_button_icon_size
+        dialog=QDialog(self);dialog.setWindowTitle("Code Generation Options");dialog.setWindowIcon(get_standard_icon(QStyle.SP_DialogSaveButton,"Cde",target_size=btn_icon_s));layout=QFormLayout(dialog);layout.setSpacing(8);layout.setContentsMargins(10,10,10,10)
+        lang_combo=QComboBox();lang_combo.addItems(["C","C++"]);lang_combo.setCurrentText("C++");layout.addRow("Target Language:",lang_combo)
+        default_output_base=os.path.dirname(model_path);output_dir_edit=QLineEdit(default_output_base);output_dir_edit.setPlaceholderText("Base directory for generated code")
+        browse_btn_codegen=QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon,"Brw",target_size=btn_icon_s)," Browse...");browse_btn_codegen.setIconSize(btn_icon_s)
+        browse_btn_codegen.clicked.connect(lambda:output_dir_edit.setText(QFileDialog.getExistingDirectory(dialog,"Select Base Output Directory",output_dir_edit.text()) or output_dir_edit.text()))
+        dir_layout_codegen=QHBoxLayout();dir_layout_codegen.addWidget(output_dir_edit,1);dir_layout_codegen.addWidget(browse_btn_codegen);layout.addRow("Base Output Directory:",dir_layout_codegen)
+        buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel);buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject);layout.addRow(buttons);dialog.setMinimumWidth(450)
+        if dialog.exec_()==QDialog.Accepted:
+            language=lang_combo.currentText();output_dir_base=output_dir_edit.text().strip()
+            if not output_dir_base:QMessageBox.warning(self,"Input Error","Base output directory required.");return
+            if not os.path.exists(output_dir_base):
+                 try:os.makedirs(output_dir_base,exist_ok=True)
+                 except OSError as e:QMessageBox.critical(self,"Directory Error",f"Could not create directory:\n{e}");return
+            self._start_matlab_operation(f"Generating {language} code for '{os.path.basename(model_path)}'");self.matlab_connection.generate_code(model_path,language,output_dir_base)
 
-    def on_matlab_settings(self): MatlabSettingsDialog(self.matlab_connection, self).exec_()
-    def on_about(self):
-        QMessageBox.about(self, "About " + APP_NAME,
-            f"<h3 style='color:{COLOR_ACCENT_PRIMARY};'>{APP_NAME} v{APP_VERSION}</h3>"
-            "<p>Graphical tool for brain-inspired state machine design. Facilitates creation, visualization, "
-            "modification of state diagrams, and integrates with MATLAB/Simulink for simulation and C/C++ code generation.</p>"
-            "<p><b>Features:</b><ul><li>Intuitive diagramming (click-to-add, drag-drop).</li><li>Rich property editing with snippets.</li>"
-            "<li>JSON storage ({FILE_EXTENSION}).</li><li>Undo/Redo.</li><li>Zoom/Pan canvas with grid/snapping.</li>"
-            "<li><b>MATLAB Integration:</b><ul><li>Auto/manual MATLAB path config.</li><li>Export to Simulink (.slx).</li>"
-            "<li>Run simulations.</li><li>Generate C/C++ code (Embedded Coder).</li></ul></li></ul></p>"
-            "<p><i>Developed by AI Revell Lab. For research/education.</i></p>")
-    def closeEvent(self, event: QCloseEvent):
+    def on_matlab_settings(self):MatlabSettingsDialog(self.matlab_connection,self).exec_()
+    def on_about(self):QMessageBox.about(self,"About "+APP_NAME,f"<h3 style='color:{COLOR_ACCENT_PRIMARY};'>{APP_NAME} v{APP_VERSION}</h3><p>Graphical tool for brain-inspired state machine design. Facilitates creation, visualization, modification of state diagrams, and integrates with MATLAB/Simulink for simulation and C/C++ code generation.</p><p><b>Features:</b><ul><li>Intuitive diagramming (click-to-add, drag-drop).</li><li>Rich property editing with snippets.</li><li>JSON storage ({FILE_EXTENSION}).</li><li>Diagram export to PNG, JPG, SVG, PDF.</li><li>Undo/Redo.</li><li>Zoom/Pan canvas with grid/snapping.</li><li><b>MATLAB Integration:</b><ul><li>Auto/manual MATLAB path config.</li><li>Export to Simulink (.slx).</li><li>Run simulations.</li><li>Generate C/C++ code (Embedded Coder).</li></ul></li></ul></p><p><i>Developed by AI Revell Lab. For research/education.</i></p>")
+    def closeEvent(self,event:QCloseEvent):
         if self._prompt_save_if_dirty():
-            if self.matlab_connection._active_threads: self.log_message(f"Closing. {len(self.matlab_connection._active_threads)} MATLAB process(es) may run in background.")
+            if self.matlab_connection._active_threads:self.log_message(f"Closing. {len(self.matlab_connection._active_threads)} MATLAB process(es) may run in background.")
             event.accept()
-        else: event.ignore()
+        else:event.ignore()
 
 if __name__ == '__main__':
-    if hasattr(Qt, 'AA_EnableHighDpiScaling'): QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    if hasattr(Qt, 'AA_UseHighDpiPixmaps'): QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    
-    app_dir = os.path.dirname(os.path.abspath(__file__))
-    # No specific dependencies folder creation needed if not using loose icon files
-
-    app = QApplication(sys.argv)
-    app.setStyleSheet(STYLE_SHEET_GLOBAL)
-    main_win = MainWindow()
-    main_win.show()
-    sys.exit(app.exec_())
+    if hasattr(Qt,'AA_EnableHighDpiScaling'):QApplication.setAttribute(Qt.AA_EnableHighDpiScaling,True)
+    if hasattr(Qt,'AA_UseHighDpiPixmaps'):QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps,True)
+    app=QApplication(sys.argv);app.setStyleSheet(STYLE_SHEET_GLOBAL);main_win=MainWindow();main_win.show();sys.exit(app.exec_())
 
