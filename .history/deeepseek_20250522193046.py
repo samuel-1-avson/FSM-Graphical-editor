@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QToolButton, QGraphicsSceneMouseEvent, QGraphicsSceneDragDropEvent,
     QGraphicsSceneHoverEvent, QGraphicsTextItem, QGraphicsDropShadowEffect
 )
-
+from fsm_simulator import FSMSimulator, FSMError
 from PyQt5.QtGui import (
     QIcon, QBrush, QColor, QFont, QPen, QPixmap, QDrag, QPainter, QPainterPath,
     QTransform, QKeyEvent, QPainterPathStroker, QPolygonF, QKeySequence,

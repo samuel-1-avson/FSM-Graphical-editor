@@ -1,4 +1,4 @@
-
+```python
 import sys
 import os
 import tempfile
@@ -3661,14 +3661,14 @@ class MainWindow(QMainWindow):
     def _append_to_py_simulation_log(self, log_entries: list[str]):
         for entry in log_entries:
             cleaned_entry = html.escape(entry) # Escape user-generated content
-        # Simple coloring for log differentiation
+            # Simple coloring for log differentiation
             if "[Condition]" in entry or "[Eval Error]" in entry or "ERROR" in entry.upper():
-                cleaned_entry = f"<span style='color:{COLOR_ACCENT_SECONDARY};'>{cleaned_entry}</span>"
+                cleaned_entry = f"<span style='color:{COLOR_ACCENT_SECONDARY.name()};'>{cleaned_entry}</span>"
             elif "Transitioned from" in entry:
-                cleaned_entry = f"<span style='color:{COLOR_ACCENT_PRIMARY}; font-weight:bold;'>{cleaned_entry}</span>"
+                cleaned_entry = f"<span style='color:{COLOR_ACCENT_PRIMARY.name()}; font-weight:bold;'>{cleaned_entry}</span>"
             elif "No eligible transition" in entry:
                 cleaned_entry = f"<span style='color:{COLOR_TEXT_SECONDARY};'>{cleaned_entry}</span>"
-        
+            
             self.py_sim_action_log_output.append(cleaned_entry)
         self.py_sim_action_log_output.verticalScrollBar().setValue(
             self.py_sim_action_log_output.verticalScrollBar().maximum()
@@ -3676,8 +3676,7 @@ class MainWindow(QMainWindow):
         if log_entries:
             last_log_short = log_entries[-1].split('\n')[0][:100] # Short version for status bar
             if "Transitioned from" in last_log_short or "No eligible transition" in last_log_short or "ERROR" in last_log_short:
-                self.log_message(f"PySim Action: {last_log_short}", is_py_sim_log_source=True)
-# ...existing code...
+                 self.log_message(f"PySim Action: {last_log_short}", is_py_sim_log_source=True)
 
 
     def on_start_py_simulation(self):
@@ -3810,3 +3809,4 @@ if __name__ == '__main__':
     main_win.show()
     sys.exit(app.exec_())
 
+```
