@@ -4,7 +4,7 @@ import os
 import tempfile
 import subprocess
 import json
-import html # Used for escaping in properties dock
+import html # <--- Used for escaping in properties dock
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDockWidget, QToolBox, QAction,
     QToolBar, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
@@ -31,62 +31,10 @@ import math
 
 
 # --- Configuration ---
-APP_VERSION = "1.5.3" # Incremented for snippet insertion buttons
+APP_VERSION = "1.5.2" # Incremented for updated placeholders and review
 APP_NAME = "Brain State Machine Designer"
 FILE_EXTENSION = ".bsm"
 FILE_FILTER = f"Brain State Machine Files (*{FILE_EXTENSION});;All Files (*)"
-
-# --- Mechatronics/Embedded Snippets ---
-MECHATRONICS_COMMON_ACTIONS = {
-    "Digital Output (High)": "set_digital_output(PIN_NUMBER, 1); % Set pin HIGH",
-    "Digital Output (Low)": "set_digital_output(PIN_NUMBER, 0); % Set pin LOW",
-    "Read Digital Input": "input_value = read_digital_input(PIN_NUMBER);",
-    "Set PWM Duty Cycle": "set_pwm_duty_cycle(PWM_CHANNEL, DUTY_VALUE_0_255);",
-    "Read Analog Input": "sensor_value = read_adc_channel(ADC_CHANNEL);",
-    "Start Timer": "start_software_timer(TIMER_ID, DURATION_MS);",
-    "Stop Timer": "stop_software_timer(TIMER_ID);",
-    "Increment Counter": "counter_variable = counter_variable + 1;",
-    "Reset Counter": "counter_variable = 0;",
-    "Set Variable": "my_variable = NEW_VALUE;",
-    "Log Message": "log_event('Event description or variable_value');",
-    "Send CAN Message": "send_can_message(CAN_ID, [BYTE1, BYTE2, BYTE3]);",
-    "Set Motor Speed": "set_motor_speed(MOTOR_ID, SPEED_VALUE);",
-    "Set Motor Position": "set_motor_position(MOTOR_ID, POSITION_TARGET);",
-    "Open Solenoid Valve": "control_solenoid(VALVE_ID, VALVE_OPEN_CMD);",
-    "Close Solenoid Valve": "control_solenoid(VALVE_ID, VALVE_CLOSE_CMD);",
-    "Enable Component": "enable_subsystem(SUBSYSTEM_X, true);",
-    "Disable Component": "enable_subsystem(SUBSYSTEM_X, false);",
-    "Acknowledge Fault": "fault_acknowledged_flag = true;",
-}
-
-MECHATRONICS_COMMON_EVENTS = {
-    "Timer Timeout": "timeout(TIMER_ID)", # Assumes a Stateflow-like timer event
-    "Button Press": "button_pressed(BUTTON_NUMBER)",
-    "Sensor Threshold Breach": "sensor_threshold(SENSOR_NAME)",
-    "Data Packet Received": "data_reception_complete(CHANNEL)",
-    "Emergency Stop Active": "emergency_stop",
-    "Rising Edge Detection": "positive_edge(SIGNAL_NAME)",
-    "Falling Edge Detection": "negative_edge(SIGNAL_NAME)",
-    "Message Received": "msg_arrived(MSG_TYPE_ID)",
-    "System Error Occurred": "system_fault(FAULT_CODE)",
-    "User Input Event": "user_command(COMMAND_CODE)",
-}
-
-MECHATRONICS_COMMON_CONDITIONS = {
-    "Is System Safe": "is_safety_interlock_active() == false",
-    "Is Mode Nominal": "get_operating_mode() == NOMINAL_MODE",
-    "Counter Reached Limit": "retry_counter >= MAX_RETRIES",
-    "Variable is Value": "my_control_variable == TARGET_STATE_VALUE",
-    "Flag is True": "is_ready_flag == true",
-    "Flag is False": "is_busy_flag == false",
-    "Battery Level OK": "get_battery_voltage_mv() > MINIMUM_OPERATING_VOLTAGE_MV",
-    "Communication Healthy": "is_communication_link_up() == true",
-    "Sensor Value In Range": "(sensor_data >= SENSOR_MIN_VALID && sensor_data <= SENSOR_MAX_VALID)",
-    "Target Reached": "abs(current_position - target_position) < POSITION_TOLERANCE",
-    "Input Signal High": "read_digital_input(PIN_FOR_CONDITION) == 1",
-    "Input Signal Low": "read_digital_input(PIN_FOR_CONDITION) == 0",
-}
-
 
 # --- Utility Functions ---
 def get_standard_icon(standard_pixmap_enum_value, fallback_text=None):
@@ -2071,11 +2019,11 @@ class StatePropertiesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("State Properties")
         self.setWindowIcon(get_standard_icon(QStyle.SP_FileDialogDetailedView, "Props"))
-        self.setMinimumWidth(450) # Increased width for new buttons
 
         layout = QFormLayout(self)
         layout.setSpacing(10)
 
+        # Defaults or from current_properties
         p = current_properties or {}
         self.name_edit = QLineEdit(p.get('name', "StateName"))
         self.name_edit.setPlaceholderText("Unique name for the state")
@@ -2086,25 +2034,19 @@ class StatePropertiesDialog(QDialog):
         self.is_final_cb.setChecked(p.get('is_final', False))
 
         self.color_button = QPushButton("Choose Color...")
-        self.current_color = QColor(p.get('color', "#BEDFFF"))
+        self.current_color = QColor(p.get('color', "#BEDFFF")) # Default state color
         self._update_color_button_style()
         self.color_button.clicked.connect(self._choose_color)
 
         self.entry_action_edit = QTextEdit(p.get('entry_action', ""))
-        self.entry_action_edit.setFixedHeight(70)
+        self.entry_action_edit.setFixedHeight(60)
         self.entry_action_edit.setPlaceholderText("MATLAB code; e.g., sensor_value = read_adc(0); motor_enable = true;")
-        entry_action_btn = self._create_insert_snippet_button(self.entry_action_edit, MECHATRONICS_COMMON_ACTIONS, "Insert Common Action")
-
         self.during_action_edit = QTextEdit(p.get('during_action', ""))
-        self.during_action_edit.setFixedHeight(70)
+        self.during_action_edit.setFixedHeight(60)
         self.during_action_edit.setPlaceholderText("MATLAB code; e.g., update_display(state_info); control_loop();")
-        during_action_btn = self._create_insert_snippet_button(self.during_action_edit, MECHATRONICS_COMMON_ACTIONS, "Insert Common Action")
-
         self.exit_action_edit = QTextEdit(p.get('exit_action', ""))
-        self.exit_action_edit.setFixedHeight(70)
+        self.exit_action_edit.setFixedHeight(60)
         self.exit_action_edit.setPlaceholderText("MATLAB code; e.g., motor_enable = false; log_event('state_exit');")
-        exit_action_btn = self._create_insert_snippet_button(self.exit_action_edit, MECHATRONICS_COMMON_ACTIONS, "Insert Common Action")
-
         self.description_edit = QTextEdit(p.get('description', ""))
         self.description_edit.setFixedHeight(80)
         self.description_edit.setPlaceholderText("Optional description for this state")
@@ -2113,36 +2055,21 @@ class StatePropertiesDialog(QDialog):
         layout.addRow(self.is_initial_cb)
         layout.addRow(self.is_final_cb)
         layout.addRow("Color:", self.color_button)
-
-        entry_layout = QHBoxLayout(); entry_layout.addWidget(self.entry_action_edit, 1); entry_layout.addWidget(entry_action_btn)
-        layout.addRow("Entry Action:", entry_layout)
-        during_layout = QHBoxLayout(); during_layout.addWidget(self.during_action_edit, 1); during_layout.addWidget(during_action_btn)
-        layout.addRow("During Action:", during_layout)
-        exit_layout = QHBoxLayout(); exit_layout.addWidget(self.exit_action_edit, 1); exit_layout.addWidget(exit_action_btn)
-        layout.addRow("Exit Action:", exit_layout)
-
+        layout.addRow("Entry Action:", self.entry_action_edit)
+        layout.addRow("During Action:", self.during_action_edit)
+        layout.addRow("Exit Action:", self.exit_action_edit)
         layout.addRow("Description:", self.description_edit)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
+        self.setMinimumWidth(400)
 
         if is_new_state:
              self.name_edit.selectAll()
              self.name_edit.setFocus()
 
-    def _create_insert_snippet_button(self, target_text_edit: QTextEdit, snippets_dict: dict, button_text="Insert..."):
-        button = QPushButton(button_text)
-        button.setToolTip(f"Click to insert a common snippet into the text field above.")
-        button.setMaximumWidth(120) # Keep button relatively small
-        menu = QMenu(self)
-        for name, snippet in snippets_dict.items():
-            action = QAction(name, self)
-            action.triggered.connect(lambda checked=False, text_edit=target_text_edit, s=snippet: text_edit.insertPlainText(s + "\n"))
-            menu.addAction(action)
-        button.setMenu(menu)
-        return button
 
     def _choose_color(self):
         color = QColorDialog.getColor(self.current_color, self, "Select State Color")
@@ -2152,6 +2079,7 @@ class StatePropertiesDialog(QDialog):
 
     def _update_color_button_style(self):
         self.color_button.setStyleSheet(f"background-color: {self.current_color.name()}; color: {'black' if self.current_color.lightnessF() > 0.5 else 'white'};")
+
 
     def get_properties(self):
         return {
@@ -2170,7 +2098,6 @@ class TransitionPropertiesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Transition Properties")
         self.setWindowIcon(get_standard_icon(QStyle.SP_FileDialogDetailedView, "Props"))
-        self.setMinimumWidth(500) # Increased width
 
         layout = QFormLayout(self)
         layout.setSpacing(10)
@@ -2178,96 +2105,48 @@ class TransitionPropertiesDialog(QDialog):
         p = current_properties or {}
         self.event_edit = QLineEdit(p.get('event', ""))
         self.event_edit.setPlaceholderText("e.g., timeout, data_ready_event, emergency_stop")
-        event_btn = self._create_insert_snippet_button_lineedit(self.event_edit, MECHATRONICS_COMMON_EVENTS, "Insert Event")
-
         self.condition_edit = QLineEdit(p.get('condition', ""))
         self.condition_edit.setPlaceholderText("e.g., temperature > 100 && valve_open == false")
-        condition_btn = self._create_insert_snippet_button_lineedit(self.condition_edit, MECHATRONICS_COMMON_CONDITIONS, "Insert Condition")
-
         self.action_edit = QTextEdit(p.get('action', ""))
         self.action_edit.setPlaceholderText("MATLAB code; e.g., set_actuator_pos(CH_X, 0); reset_timer(TIMER_A);")
-        self.action_edit.setFixedHeight(70)
-        action_btn = self._create_insert_snippet_button_qtextedit(self.action_edit, MECHATRONICS_COMMON_ACTIONS, "Insert Action")
-
+        self.action_edit.setFixedHeight(60)
 
         self.color_button = QPushButton("Choose Color...")
-        self.current_color = QColor(p.get('color', "#007878"))
+        self.current_color = QColor(p.get('color', "#007878")) # Default transition color
         self._update_color_button_style()
         self.color_button.clicked.connect(self._choose_color)
 
         self.offset_perp_spin = QSpinBox()
         self.offset_perp_spin.setRange(-800, 800); self.offset_perp_spin.setSingleStep(10)
         self.offset_perp_spin.setValue(int(p.get('control_offset_x', 0)))
-        self.offset_perp_spin.setToolTip("Controls the perpendicular bend of the curve (0 for straight line).")
+        self.offset_perp_spin.setToolTip("Controls the perpendicular bend of the curve (0 for straight line). Positive values bend one way, negative the other.")
 
         self.offset_tang_spin = QSpinBox()
         self.offset_tang_spin.setRange(-800, 800); self.offset_tang_spin.setSingleStep(10)
         self.offset_tang_spin.setValue(int(p.get('control_offset_y', 0)))
-        self.offset_tang_spin.setToolTip("Controls the tangential shift of the curve's midpoint.")
+        self.offset_tang_spin.setToolTip("Controls the tangential shift of the curve's midpoint. Affects how 'early' or 'late' the curve bends.")
 
         self.description_edit = QTextEdit(p.get('description', ""))
         self.description_edit.setFixedHeight(80)
         self.description_edit.setPlaceholderText("Optional description for this transition")
 
-        event_layout = QHBoxLayout(); event_layout.addWidget(self.event_edit,1); event_layout.addWidget(event_btn)
-        layout.addRow("Event Trigger:", event_layout)
-        condition_layout = QHBoxLayout(); condition_layout.addWidget(self.condition_edit,1); condition_layout.addWidget(condition_btn)
-        layout.addRow("Condition (Guard):", condition_layout)
-        action_layout = QHBoxLayout(); action_layout.addWidget(self.action_edit,1); action_layout.addWidget(action_btn)
-        layout.addRow("Transition Action:", action_layout)
-
+        layout.addRow("Event Trigger:", self.event_edit)
+        layout.addRow("Condition (Guard):", self.condition_edit)
+        layout.addRow("Transition Action:", self.action_edit)
         layout.addRow("Color:", self.color_button)
-        curve_layout = QHBoxLayout()
-        curve_layout.addWidget(QLabel("Bend:"))
-        curve_layout.addWidget(self.offset_perp_spin)
-        curve_layout.addWidget(QLabel("Mid Shift:"))
-        curve_layout.addWidget(self.offset_tang_spin)
-        curve_layout.addStretch()
-        layout.addRow("Curve Shape:", curve_layout)
-
+        layout.addRow("Curve Bend:", self.offset_perp_spin)
+        layout.addRow("Curve Midpoint Shift:", self.offset_tang_spin)
         layout.addRow("Description:", self.description_edit)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
+        self.setMinimumWidth(450)
 
         if is_new_transition:
             self.event_edit.setFocus()
 
-    def _create_insert_snippet_button_lineedit(self, target_line_edit: QLineEdit, snippets_dict: dict, button_text="Insert..."):
-        button = QPushButton(button_text)
-        button.setToolTip(f"Click to insert a common snippet into the text field.")
-        button.setMaximumWidth(120)
-        menu = QMenu(self)
-        for name, snippet in snippets_dict.items():
-            action = QAction(name, self)
-            # For QLineEdit, we typically replace or append intelligently.
-            # Simple approach: append if not empty and add a space, otherwise set text.
-            def insert_logic(checked=False, line_edit=target_line_edit, s=snippet):
-                current_text = line_edit.text()
-                cursor_pos = line_edit.cursorPosition()
-                new_text = current_text[:cursor_pos] + s + current_text[cursor_pos:]
-                line_edit.setText(new_text)
-                line_edit.setCursorPosition(cursor_pos + len(s))
-
-            action.triggered.connect(insert_logic)
-            menu.addAction(action)
-        button.setMenu(menu)
-        return button
-
-    def _create_insert_snippet_button_qtextedit(self, target_text_edit: QTextEdit, snippets_dict: dict, button_text="Insert..."):
-        # Same as in StatePropertiesDialog
-        button = QPushButton(button_text)
-        button.setToolTip(f"Click to insert a common snippet into the text field.")
-        button.setMaximumWidth(120)
-        menu = QMenu(self)
-        for name, snippet in snippets_dict.items():
-            action = QAction(name, self)
-            action.triggered.connect(lambda checked=False, text_edit=target_text_edit, s=snippet: text_edit.insertPlainText(s + "\n")) # Add newline for QTextEdit
-            menu.addAction(action)
-        button.setMenu(menu)
-        return button
 
     def _choose_color(self):
         color = QColorDialog.getColor(self.current_color, self, "Select Transition Color")
@@ -2277,6 +2156,7 @@ class TransitionPropertiesDialog(QDialog):
 
     def _update_color_button_style(self):
         self.color_button.setStyleSheet(f"background-color: {self.current_color.name()}; color: {'black' if self.current_color.lightnessF() > 0.5 else 'white'};")
+
 
     def get_properties(self):
         return {
@@ -3232,7 +3112,7 @@ class MainWindow(QMainWindow):
                           "<p><b>Key Features:</b></p>"
                           "<ul>"
                           "<li>Intuitive diagramming: click-to-add, drag-and-drop elements (States, Initial/Final States, Comments).</li>"
-                          "<li>Rich property editing for states (color, entry/during/exit actions, description) and transitions (event, condition, action, color, curve control, description) with common snippet insertion.</li>"
+                          "<li>Rich property editing for states (color, entry/during/exit actions, description) and transitions (event, condition, action, color, curve control, description).</li>"
                           "<li>Persistent storage in JSON format ({FILE_EXTENSION}).</li>"
                           "<li>Robust Undo/Redo functionality.</li>"
                           "<li>Zoomable and pannable canvas with grid and snapping.</li>"
@@ -3273,3 +3153,4 @@ if __name__ == '__main__':
     main_win = MainWindow()
     main_win.show()
     sys.exit(app.exec_())
+
