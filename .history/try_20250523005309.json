@@ -1,0 +1,23 @@
+{
+  "description": "Microwave Oven FSM",
+  "states": [
+    {"name": "Idle", "is_initial": true, "properties": {"color": "#9E9E9E"}},
+    {"name": "Door_Open", "properties": {"color": "#FFC107"}},
+    {"name": "Setting_Time", "entry_action": "displayTime=0;", "properties": {"color": "#03A9F4"}},
+    {"name": "Cooking", "entry_action": "startMagnetron(); startTimer(displayTime);", "exit_action": "stopMagnetron();", "properties": {"color": "#4CAF50"}},
+    {"name": "Paused", "exit_action": "resumeTimer();", "properties": {"color": "#FF9800"}}
+  ],
+  "transitions": [
+    {"source": "Idle", "target": "Door_Open", "event": "doorOpened"},
+    {"source": "Idle", "target": "Setting_Time", "event": "numberPressed"},
+    {"source": "Door_Open", "target": "Idle", "event": "doorClosed"},
+    {"source": "Setting_Time", "target": "Setting_Time", "event": "numberPressed", "action": "appendDigitToTime(event.digit);"},
+    {"source": "Setting_Time", "target": "Door_Open", "event": "doorOpened", "action": "resetTime();"},
+    {"source": "Setting_Time", "target": "Cooking", "event": "startPressed", "condition": "displayTime > 0"},
+    {"source": "Cooking", "target": "Idle", "event": "timerExpired", "action": "notifyDone(); resetTime();"},
+    {"source": "Cooking", "target": "Paused", "event": "stopPressed"},
+    {"source": "Cooking", "target": "Door_Open", "event": "doorOpened", "action": "stopTimer(); stopMagnetron(); resetTime();"},
+    {"source": "Paused", "target": "Cooking", "event": "startPressed"},
+    {"source": "Paused", "target": "Door_Open", "event": "doorOpened", "action": "resetTime();"}
+  ]
+}
