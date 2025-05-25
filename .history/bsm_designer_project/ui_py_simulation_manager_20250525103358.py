@@ -6,24 +6,29 @@ from PyQt5.QtWidgets import (
     QToolButton, QHeaderView, QAbstractItemView, QWidget, QStyle
 )
 from PyQt5.QtGui import QIcon, QColor
+# ***** THIS IS THE FIX - Change pyqtSlot to pyqtSignal for signal definitions *****
 from PyQt5.QtCore import QObject, pyqtSlot, pyqtSignal, QSize, Qt
+# ***** END OF FIX *****
 
 from fsm_simulator import FSMSimulator, FSMError
 from graphics_items import GraphicsStateItem # For type hint
-from utils import get_standard_icon # Assumes utils.py/get_standard_icon takes 2 args now
+from utils import get_standard_icon
 from config import COLOR_ACCENT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_PY_SIM_STATE_ACTIVE
 
 import logging
 logger = logging.getLogger(__name__)
 
 class PySimulationUIManager(QObject):
-    simulationStateChanged = pyqtSignal(bool) 
-    requestGlobalUIEnable = pyqtSignal(bool)  
+    # ***** THESE WERE pyqtSlot, NOW CORRECTLY pyqtSignal *****
+    simulationStateChanged = pyqtSignal(bool) # Emitted when sim starts/stops
+    requestGlobalUIEnable = pyqtSignal(bool)  # Emitted to request MainWindow to enable/disable global UI
+    # ***** END OF CORRECTION *****
 
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
-        self.mw = main_window 
+        self.mw = main_window # Reference to MainWindow
 
+        # UI Elements for the PySim Dock
         self.py_sim_start_btn: QToolButton = None
         self.py_sim_stop_btn: QToolButton = None
         self.py_sim_reset_btn: QToolButton = None
@@ -34,10 +39,15 @@ class PySimulationUIManager(QObject):
         self.py_sim_current_state_label: QLabel = None
         self.py_sim_variables_table: QTableWidget = None
         self.py_sim_action_log_output: QTextEdit = None
+
+        # Internal state for highlighting
         self._py_sim_currently_highlighted_item: GraphicsStateItem | None = None
+        # self._py_sim_currently_highlighted_transition: GraphicsTransitionItem | None = None # If implemented
+
         self._connect_actions_to_manager_slots()
 
     def _connect_actions_to_manager_slots(self):
+        # Connect MainWindow's PySim actions to this manager's slots
         if hasattr(self.mw, 'start_py_sim_action'):
             self.mw.start_py_sim_action.triggered.connect(self.on_start_py_simulation)
         if hasattr(self.mw, 'stop_py_sim_action'):
@@ -50,62 +60,39 @@ class PySimulationUIManager(QObject):
         py_sim_layout = QVBoxLayout(py_sim_widget)
         py_sim_layout.setContentsMargins(5, 5, 5, 5); py_sim_layout.setSpacing(5)
 
+        # Controls Group
         controls_group = QGroupBox("Controls")
         controls_layout = QHBoxLayout(); controls_layout.setSpacing(5)
-        
-        self.py_sim_start_btn = QToolButton()
-        if hasattr(self.mw, 'start_py_sim_action'): self.py_sim_start_btn.setDefaultAction(self.mw.start_py_sim_action)
-        else: 
-            self.py_sim_start_btn.setText("Start")
-            # ***** CORRECTED CALL *****
-            self.py_sim_start_btn.setIcon(get_standard_icon(QStyle.SP_MediaPlay, "Py▶"))
-            self.py_sim_start_btn.clicked.connect(self.on_start_py_simulation)
-
-        self.py_sim_stop_btn = QToolButton()
-        if hasattr(self.mw, 'stop_py_sim_action'): self.py_sim_stop_btn.setDefaultAction(self.mw.stop_py_sim_action)
-        else: 
-            self.py_sim_stop_btn.setText("Stop")
-            # ***** CORRECTED CALL *****
-            self.py_sim_stop_btn.setIcon(get_standard_icon(QStyle.SP_MediaStop, "Py■"))
-            self.py_sim_stop_btn.clicked.connect(lambda: self.on_stop_py_simulation(silent=False))
-
-        self.py_sim_reset_btn = QToolButton()
-        if hasattr(self.mw, 'reset_py_sim_action'): self.py_sim_reset_btn.setDefaultAction(self.mw.reset_py_sim_action)
-        else: 
-            self.py_sim_reset_btn.setText("Reset")
-            # ***** CORRECTED CALL *****
-            self.py_sim_reset_btn.setIcon(get_standard_icon(QStyle.SP_MediaSkipBackward, "Py«"))
-            self.py_sim_reset_btn.clicked.connect(self.on_reset_py_simulation)
-
-        # ***** THIS IS THE LINE FROM THE TRACEBACK - CORRECTED CALL *****
-        self.py_sim_step_btn = QPushButton(get_standard_icon(QStyle.SP_MediaSeekForward, "Step"), "Step")
-        # ***** END OF CORRECTION FOR THIS LINE *****
+        self.py_sim_start_btn = QToolButton(); self.py_sim_start_btn.setDefaultAction(self.mw.start_py_sim_action)
+        self.py_sim_stop_btn = QToolButton(); self.py_sim_stop_btn.setDefaultAction(self.mw.stop_py_sim_action)
+        self.py_sim_reset_btn = QToolButton(); self.py_sim_reset_btn.setDefaultAction(self.mw.reset_py_sim_action)
+        self.py_sim_step_btn = QPushButton(get_standard_icon(self.mw.style(), QStyle.SP_MediaSeekForward, "Step"), "Step")
         self.py_sim_step_btn.clicked.connect(self.on_step_py_simulation)
-
         for btn in [self.py_sim_start_btn, self.py_sim_stop_btn, self.py_sim_reset_btn]:
             btn.setToolButtonStyle(Qt.ToolButtonIconOnly); btn.setIconSize(QSize(18, 18)); controls_layout.addWidget(btn)
         controls_layout.addWidget(self.py_sim_step_btn); controls_layout.addStretch()
         controls_group.setLayout(controls_layout); py_sim_layout.addWidget(controls_group)
 
+        # Event Trigger Group
         event_group = QGroupBox("Event Trigger")
         event_layout = QHBoxLayout(); event_layout.setSpacing(5)
         self.py_sim_event_combo = QComboBox(); self.py_sim_event_combo.addItem("None (Internal Step)"); self.py_sim_event_combo.setEditable(False)
         event_layout.addWidget(self.py_sim_event_combo, 1)
         self.py_sim_event_name_edit = QLineEdit(); self.py_sim_event_name_edit.setPlaceholderText("Custom event name")
         event_layout.addWidget(self.py_sim_event_name_edit, 1)
-        # ***** CORRECTED CALL *****
-        self.py_sim_trigger_event_btn = QPushButton(get_standard_icon(QStyle.SP_MediaPlay, "Trg"), "Trigger")
-        # ***** END OF CORRECTION *****
+        self.py_sim_trigger_event_btn = QPushButton(get_standard_icon(self.mw.style(), QStyle.SP_MediaPlay, "Trg"), "Trigger")
         self.py_sim_trigger_event_btn.clicked.connect(self.on_trigger_py_event)
         event_layout.addWidget(self.py_sim_trigger_event_btn)
         event_group.setLayout(event_layout); py_sim_layout.addWidget(event_group)
 
+        # Current State Group
         state_group = QGroupBox("Current State")
         state_layout = QVBoxLayout()
         self.py_sim_current_state_label = QLabel("<i>Not Running</i>"); self.py_sim_current_state_label.setStyleSheet("font-size: 9pt; padding: 3px;")
         state_layout.addWidget(self.py_sim_current_state_label)
         state_group.setLayout(state_layout); py_sim_layout.addWidget(state_group)
 
+        # Variables Group
         variables_group = QGroupBox("Variables")
         variables_layout = QVBoxLayout()
         self.py_sim_variables_table = QTableWidget(); self.py_sim_variables_table.setRowCount(0); self.py_sim_variables_table.setColumnCount(2)
@@ -115,25 +102,20 @@ class PySimulationUIManager(QObject):
         variables_layout.addWidget(self.py_sim_variables_table)
         variables_group.setLayout(variables_layout); py_sim_layout.addWidget(variables_group)
 
+        # Action Log Group
         log_group = QGroupBox("Action Log")
         log_layout = QVBoxLayout()
         self.py_sim_action_log_output = QTextEdit(); self.py_sim_action_log_output.setReadOnly(True)
-        self.py_sim_action_log_output.setObjectName("PySimActionLog") 
+        self.py_sim_action_log_output.setObjectName("PySimActionLog") # For stylesheet
         self.py_sim_action_log_output.setHtml("<i>Simulation log will appear here...</i>")
         log_layout.addWidget(self.py_sim_action_log_output)
         log_group.setLayout(log_layout); py_sim_layout.addWidget(log_group, 1)
         
-        self._update_internal_controls_enabled_state() 
+        self._update_internal_controls_enabled_state() # Initial state
         return py_sim_widget
 
-    # ... (rest of the methods in PySimulationUIManager should be fine regarding this specific error,
-    #      assuming they don't also incorrectly call get_standard_icon)
-    
     def _update_internal_controls_enabled_state(self):
-        is_matlab_op_running = False
-        if hasattr(self.mw, 'progress_bar') and self.mw.progress_bar: 
-            is_matlab_op_running = self.mw.progress_bar.isVisible()
-            
+        is_matlab_op_running = self.mw.progress_bar.isVisible() if self.mw.progress_bar else False
         sim_active = self.mw.py_sim_active 
 
         sim_controls_enabled = sim_active and not is_matlab_op_running

@@ -1500,22 +1500,13 @@ class MainWindow(QMainWindow):
         if self.resource_monitor_worker and self.resource_monitor_thread:
             logger.info("Stopping resource monitor...")
             if self.resource_monitor_thread.isRunning():
-                # Ensure stop_monitoring is called in the worker's thread context
                 QMetaObject.invokeMethod(self.resource_monitor_worker, "stop_monitoring", Qt.QueuedConnection)
-                self.resource_monitor_thread.quit() # Asks the event loop to finish
-                # Wait for interval_ms + a small buffer to allow the worker's loop to finish
-                wait_time = 2200 # Default wait time if worker or attribute is missing
-                if self.resource_monitor_worker and hasattr(self.resource_monitor_worker, 'interval_ms'):
-                     wait_time = self.resource_monitor_worker.interval_ms + 200 # e.g., 2000 + 200 = 2200
-
+                self.resource_monitor_thread.quit()
+                wait_time = self.resource_monitor_worker.interval_ms + 200 if self.resource_monitor_worker else 2200
                 if not self.resource_monitor_thread.wait(wait_time): 
-                    logger.warning("Resource monitor thread did not quit gracefully. Terminating.")
-                    self.resource_monitor_thread.terminate() 
-                    self.resource_monitor_thread.wait(100) 
-                else:
-                    logger.info("Resource monitor thread stopped.")
-            self.resource_monitor_worker = None # Help with garbage collection
-            self.resource_monitor_thread = None # Help with garbage collection
+                    logger.warning("Resource monitor thread termination timeout."); self.resource_monitor_thread.terminate(); self.resource_monitor_thread.wait(100)
+                else: logger.info("Resource monitor thread stopped.")
+            self.resource_monitor_worker = self.resource_monitor_thread = None
 
         if self._prompt_save_if_dirty():
             if self.matlab_connection and hasattr(self.matlab_connection, '_active_threads') and self.matlab_connection._active_threads:

@@ -6,24 +6,25 @@ from PyQt5.QtWidgets import (
     QToolButton, QHeaderView, QAbstractItemView, QWidget, QStyle
 )
 from PyQt5.QtGui import QIcon, QColor
-from PyQt5.QtCore import QObject, pyqtSlot, pyqtSignal, QSize, Qt
+from PyQt5.QtCore import QObject, pyqtSlot, QSize, Qt
 
 from fsm_simulator import FSMSimulator, FSMError
 from graphics_items import GraphicsStateItem # For type hint
-from utils import get_standard_icon # Assumes utils.py/get_standard_icon takes 2 args now
+from utils import get_standard_icon
 from config import COLOR_ACCENT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_PY_SIM_STATE_ACTIVE
 
 import logging
 logger = logging.getLogger(__name__)
 
 class PySimulationUIManager(QObject):
-    simulationStateChanged = pyqtSignal(bool) 
-    requestGlobalUIEnable = pyqtSignal(bool)  
+    simulationStateChanged = pyqtSlot(bool) # Emitted when sim starts/stops
+    requestGlobalUIEnable = pyqtSlot(bool)  # Emitted to request MainWindow to enable/disable global UI
 
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
-        self.mw = main_window 
+        self.mw = main_window # Reference to MainWindow
 
+        # UI Elements for the PySim Dock
         self.py_sim_start_btn: QToolButton = None
         self.py_sim_stop_btn: QToolButton = None
         self.py_sim_reset_btn: QToolButton = None
@@ -34,10 +35,15 @@ class PySimulationUIManager(QObject):
         self.py_sim_current_state_label: QLabel = None
         self.py_sim_variables_table: QTableWidget = None
         self.py_sim_action_log_output: QTextEdit = None
+
+        # Internal state for highlighting
         self._py_sim_currently_highlighted_item: GraphicsStateItem | None = None
+        # self._py_sim_currently_highlighted_transition: GraphicsTransitionItem | None = None # If implemented
+
         self._connect_actions_to_manager_slots()
 
     def _connect_actions_to_manager_slots(self):
+        # Connect MainWindow's PySim actions to this manager's slots
         if hasattr(self.mw, 'start_py_sim_action'):
             self.mw.start_py_sim_action.triggered.connect(self.on_start_py_simulation)
         if hasattr(self.mw, 'stop_py_sim_action'):
@@ -50,62 +56,39 @@ class PySimulationUIManager(QObject):
         py_sim_layout = QVBoxLayout(py_sim_widget)
         py_sim_layout.setContentsMargins(5, 5, 5, 5); py_sim_layout.setSpacing(5)
 
+        # Controls Group
         controls_group = QGroupBox("Controls")
         controls_layout = QHBoxLayout(); controls_layout.setSpacing(5)
-        
-        self.py_sim_start_btn = QToolButton()
-        if hasattr(self.mw, 'start_py_sim_action'): self.py_sim_start_btn.setDefaultAction(self.mw.start_py_sim_action)
-        else: 
-            self.py_sim_start_btn.setText("Start")
-            # ***** CORRECTED CALL *****
-            self.py_sim_start_btn.setIcon(get_standard_icon(QStyle.SP_MediaPlay, "Py▶"))
-            self.py_sim_start_btn.clicked.connect(self.on_start_py_simulation)
-
-        self.py_sim_stop_btn = QToolButton()
-        if hasattr(self.mw, 'stop_py_sim_action'): self.py_sim_stop_btn.setDefaultAction(self.mw.stop_py_sim_action)
-        else: 
-            self.py_sim_stop_btn.setText("Stop")
-            # ***** CORRECTED CALL *****
-            self.py_sim_stop_btn.setIcon(get_standard_icon(QStyle.SP_MediaStop, "Py■"))
-            self.py_sim_stop_btn.clicked.connect(lambda: self.on_stop_py_simulation(silent=False))
-
-        self.py_sim_reset_btn = QToolButton()
-        if hasattr(self.mw, 'reset_py_sim_action'): self.py_sim_reset_btn.setDefaultAction(self.mw.reset_py_sim_action)
-        else: 
-            self.py_sim_reset_btn.setText("Reset")
-            # ***** CORRECTED CALL *****
-            self.py_sim_reset_btn.setIcon(get_standard_icon(QStyle.SP_MediaSkipBackward, "Py«"))
-            self.py_sim_reset_btn.clicked.connect(self.on_reset_py_simulation)
-
-        # ***** THIS IS THE LINE FROM THE TRACEBACK - CORRECTED CALL *****
-        self.py_sim_step_btn = QPushButton(get_standard_icon(QStyle.SP_MediaSeekForward, "Step"), "Step")
-        # ***** END OF CORRECTION FOR THIS LINE *****
+        self.py_sim_start_btn = QToolButton(); self.py_sim_start_btn.setDefaultAction(self.mw.start_py_sim_action)
+        self.py_sim_stop_btn = QToolButton(); self.py_sim_stop_btn.setDefaultAction(self.mw.stop_py_sim_action)
+        self.py_sim_reset_btn = QToolButton(); self.py_sim_reset_btn.setDefaultAction(self.mw.reset_py_sim_action)
+        self.py_sim_step_btn = QPushButton(get_standard_icon(self.mw.style(), QStyle.SP_MediaSeekForward, "Step"), "Step")
         self.py_sim_step_btn.clicked.connect(self.on_step_py_simulation)
-
         for btn in [self.py_sim_start_btn, self.py_sim_stop_btn, self.py_sim_reset_btn]:
             btn.setToolButtonStyle(Qt.ToolButtonIconOnly); btn.setIconSize(QSize(18, 18)); controls_layout.addWidget(btn)
         controls_layout.addWidget(self.py_sim_step_btn); controls_layout.addStretch()
         controls_group.setLayout(controls_layout); py_sim_layout.addWidget(controls_group)
 
+        # Event Trigger Group
         event_group = QGroupBox("Event Trigger")
         event_layout = QHBoxLayout(); event_layout.setSpacing(5)
         self.py_sim_event_combo = QComboBox(); self.py_sim_event_combo.addItem("None (Internal Step)"); self.py_sim_event_combo.setEditable(False)
         event_layout.addWidget(self.py_sim_event_combo, 1)
         self.py_sim_event_name_edit = QLineEdit(); self.py_sim_event_name_edit.setPlaceholderText("Custom event name")
         event_layout.addWidget(self.py_sim_event_name_edit, 1)
-        # ***** CORRECTED CALL *****
-        self.py_sim_trigger_event_btn = QPushButton(get_standard_icon(QStyle.SP_MediaPlay, "Trg"), "Trigger")
-        # ***** END OF CORRECTION *****
+        self.py_sim_trigger_event_btn = QPushButton(get_standard_icon(self.mw.style(), QStyle.SP_MediaPlay, "Trg"), "Trigger")
         self.py_sim_trigger_event_btn.clicked.connect(self.on_trigger_py_event)
         event_layout.addWidget(self.py_sim_trigger_event_btn)
         event_group.setLayout(event_layout); py_sim_layout.addWidget(event_group)
 
+        # Current State Group
         state_group = QGroupBox("Current State")
         state_layout = QVBoxLayout()
         self.py_sim_current_state_label = QLabel("<i>Not Running</i>"); self.py_sim_current_state_label.setStyleSheet("font-size: 9pt; padding: 3px;")
         state_layout.addWidget(self.py_sim_current_state_label)
         state_group.setLayout(state_layout); py_sim_layout.addWidget(state_group)
 
+        # Variables Group
         variables_group = QGroupBox("Variables")
         variables_layout = QVBoxLayout()
         self.py_sim_variables_table = QTableWidget(); self.py_sim_variables_table.setRowCount(0); self.py_sim_variables_table.setColumnCount(2)
@@ -115,33 +98,33 @@ class PySimulationUIManager(QObject):
         variables_layout.addWidget(self.py_sim_variables_table)
         variables_group.setLayout(variables_layout); py_sim_layout.addWidget(variables_group)
 
+        # Action Log Group
         log_group = QGroupBox("Action Log")
         log_layout = QVBoxLayout()
         self.py_sim_action_log_output = QTextEdit(); self.py_sim_action_log_output.setReadOnly(True)
-        self.py_sim_action_log_output.setObjectName("PySimActionLog") 
+        self.py_sim_action_log_output.setObjectName("PySimActionLog") # For stylesheet
         self.py_sim_action_log_output.setHtml("<i>Simulation log will appear here...</i>")
         log_layout.addWidget(self.py_sim_action_log_output)
         log_group.setLayout(log_layout); py_sim_layout.addWidget(log_group, 1)
         
-        self._update_internal_controls_enabled_state() 
+        self._update_internal_controls_enabled_state() # Initial state
         return py_sim_widget
 
-    # ... (rest of the methods in PySimulationUIManager should be fine regarding this specific error,
-    #      assuming they don't also incorrectly call get_standard_icon)
-    
     def _update_internal_controls_enabled_state(self):
-        is_matlab_op_running = False
-        if hasattr(self.mw, 'progress_bar') and self.mw.progress_bar: 
-            is_matlab_op_running = self.mw.progress_bar.isVisible()
-            
-        sim_active = self.mw.py_sim_active 
+        # This method enables/disables buttons INSIDE the PySimDock
+        is_matlab_op_running = self.mw.progress_bar.isVisible() if self.mw.progress_bar else False
+        sim_active = self.mw.py_sim_active # Get truth from MainWindow
 
         sim_controls_enabled = sim_active and not is_matlab_op_running
         
+        # These buttons (start, stop, reset) are actually linked to MainWindow actions,
+        # so their enabled state is primarily managed by MainWindow._update_py_simulation_actions_enabled_state.
+        # However, we ensure they reflect the overall sim_active state here as well.
         if self.py_sim_start_btn: self.py_sim_start_btn.setEnabled(not sim_active and not is_matlab_op_running)
         if self.py_sim_stop_btn: self.py_sim_stop_btn.setEnabled(sim_active and not is_matlab_op_running)
         if self.py_sim_reset_btn: self.py_sim_reset_btn.setEnabled(sim_active and not is_matlab_op_running)
         
+        # Dock-specific controls
         if self.py_sim_step_btn: self.py_sim_step_btn.setEnabled(sim_controls_enabled)
         if self.py_sim_event_name_edit: self.py_sim_event_name_edit.setEnabled(sim_controls_enabled)
         if self.py_sim_trigger_event_btn: self.py_sim_trigger_event_btn.setEnabled(sim_controls_enabled)
@@ -149,41 +132,47 @@ class PySimulationUIManager(QObject):
 
 
     def _set_simulation_active_state(self, is_running: bool):
-        self.mw.py_sim_active = is_running 
-        self.simulationStateChanged.emit(is_running) 
-        self.requestGlobalUIEnable.emit(not is_running) 
-        self._update_internal_controls_enabled_state() 
+        # Central place to change simulation state and notify MainWindow
+        self.mw.py_sim_active = is_running # Update MainWindow's flag
+        self.simulationStateChanged.emit(is_running) # Inform MainWindow about the state change
+        self.requestGlobalUIEnable.emit(not is_running) # Request MainWindow to update global UI
+        self._update_internal_controls_enabled_state() # Update this dock's buttons
 
     def _highlight_sim_active_state(self, state_name_to_highlight: str | None):
         if self._py_sim_currently_highlighted_item:
             self._py_sim_currently_highlighted_item.set_py_sim_active_style(False)
             self._py_sim_currently_highlighted_item = None
 
-        if state_name_to_highlight and self.mw.py_fsm_engine: 
+        if state_name_to_highlight and self.mw.py_fsm_engine: # Access engine via MainWindow
+            # Determine the top-level active state for highlighting in the main diagram
             top_level_active_state_id = None
             if self.mw.py_fsm_engine.sm and self.mw.py_fsm_engine.sm.current_state:
                 top_level_active_state_id = self.mw.py_fsm_engine.sm.current_state.id
             
             if top_level_active_state_id:
-                for item in self.mw.scene.items(): 
+                for item in self.mw.scene.items(): # Access scene via MainWindow
                     if isinstance(item, GraphicsStateItem) and item.text_label == top_level_active_state_id:
                         logger.debug("PySimUI: Highlighting top-level active state '%s' (full hierarchical: '%s')", top_level_active_state_id, state_name_to_highlight)
                         item.set_py_sim_active_style(True)
                         self._py_sim_currently_highlighted_item = item
-                        if self.mw.view: 
+                        if self.mw.view: # Access view via MainWindow
                              if hasattr(self.mw.view, 'ensureVisible') and callable(self.mw.view.ensureVisible):
-                                if not self.mw.view.ensureVisible(item, 50, 50): 
+                                if not self.mw.view.ensureVisible(item, 50, 50): # ensureVisible might not center if already visible
                                     self.mw.view.centerOn(item)
-                             else: 
+                             else: # Fallback if ensureVisible is not available or doesn't work as expected
                                 self.mw.view.centerOn(item)
                         break
         self.mw.scene.update()
 
     def _highlight_sim_taken_transition(self, transition_label_or_id: str | None):
-        self.mw.scene.update() 
+        # (Implementation would go here if needed for transition highlighting)
+        # if self._py_sim_currently_highlighted_transition:
+        #     self._py_sim_currently_highlighted_transition.set_py_sim_active_style(False) 
+        # self._py_sim_currently_highlighted_transition = None
+        self.mw.scene.update() # If transitions are highlighted
 
     def update_dock_ui_contents(self):
-        if not self.mw.py_fsm_engine or not self.mw.py_sim_active: 
+        if not self.mw.py_fsm_engine or not self.mw.py_sim_active: # Check MainWindow's state
             if self.py_sim_current_state_label: self.py_sim_current_state_label.setText("<i>Not Running</i>")
             if self.py_sim_variables_table: self.py_sim_variables_table.setRowCount(0)
             self._highlight_sim_active_state(None); self._highlight_sim_taken_transition(None)
@@ -272,7 +261,7 @@ class PySimulationUIManager(QObject):
     def on_stop_py_simulation(self, silent=False):
         if not self.mw.py_sim_active: return
         self._highlight_sim_active_state(None); self._highlight_sim_taken_transition(None)
-        self.mw.py_fsm_engine = None 
+        self.mw.py_fsm_engine = None # Clear MainWindow's engine instance
         self._set_simulation_active_state(False)
         self.update_dock_ui_contents()
         if not silent: self.append_to_action_log(["Python FSM Simulation stopped."])

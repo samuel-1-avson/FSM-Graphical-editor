@@ -1,3 +1,4 @@
+
 # bsm_designer_project/main.py
 
 import sys
@@ -18,7 +19,7 @@ from graphics_items import GraphicsStateItem, GraphicsTransitionItem, GraphicsCo
 from undo_commands import AddItemCommand, MoveItemsCommand, RemoveItemsCommand, EditItemPropertiesCommand
 from fsm_simulator import FSMSimulator, FSMError
 from ai_chatbot import AIChatbotManager
-from dialogs import (MatlabSettingsDialog)
+from dialogs import (MatlabSettingsDialog) # StatePropertiesDialog, TransitionPropertiesDialog, CommentPropertiesDialog handled by scene
 from config import (
     APP_VERSION, APP_NAME, FILE_EXTENSION, FILE_FILTER, STYLE_SHEET_GLOBAL,
     COLOR_ITEM_STATE_DEFAULT_BG, COLOR_ITEM_TRANSITION_DEFAULT, COLOR_ITEM_COMMENT_BG,
@@ -27,7 +28,7 @@ from config import (
     COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_TEXT_ON_ACCENT,
     COLOR_ACCENT_SECONDARY, COLOR_BORDER_LIGHT, COLOR_BORDER_MEDIUM
 )
-from utils import get_standard_icon # Ensure utils.py is updated to take 2 args
+from utils import get_standard_icon
 
 # --- UI Managers ---
 from ui_py_simulation_manager import PySimulationUIManager
@@ -45,7 +46,7 @@ except ImportError:
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDockWidget, QToolBox, QAction,
     QToolBar, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
-    QStatusBar, QTextEdit,
+    QStatusBar, QTextEdit, # QTextEdit still needed for log_output
     QPushButton, QListWidget, QListWidgetItem, QMenu, QMessageBox,
     QInputDialog, QLineEdit, QColorDialog, QDialog, QFormLayout,
     QSpinBox, QComboBox, QGraphicsRectItem, QGraphicsPathItem, QDialogButtonBox,
@@ -77,7 +78,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# --- DraggableToolButton Class Definition ---
+# --- DraggableToolButton Class Definition (Unchanged from previous version) ---
 class DraggableToolButton(QPushButton):
     def __init__(self, text, mime_type, item_type_data, parent=None):
         super().__init__(text, parent)
@@ -145,9 +146,9 @@ class DraggableToolButton(QPushButton):
         drag.exec_(Qt.CopyAction | Qt.MoveAction)
 
 
-# --- Embedded MATLAB Integration Logic ---
+# --- Embedded MATLAB Integration Logic (Unchanged from previous version) ---
 class MatlabCommandWorker(QObject):
-    finished_signal = pyqtSignal(bool, str, str) 
+    finished_signal = pyqtSignal(bool, str, str) # success, message, data_output
 
     def __init__(self, matlab_path, script_file, original_signal, success_message_prefix, model_name_for_context=None):
         super().__init__()
@@ -618,7 +619,7 @@ path(prevPath);  disp(['Restored MATLAB path. Removed: ', modelDir]);
         return True
 
 
-# --- Resource Monitor Worker ---
+# --- Resource Monitor Worker (Unchanged from previous version) ---
 class ResourceMonitorWorker(QObject):
     resourceUpdate = pyqtSignal(float, float, float, str)
 
@@ -690,14 +691,19 @@ class MainWindow(QMainWindow):
         self.scene.modifiedStatusChanged.connect(self.setWindowModified)
         self.scene.modifiedStatusChanged.connect(self._update_window_title)
 
+        # Python FSM Simulation related attributes (engine is managed by MainWindow)
         self.py_fsm_engine: FSMSimulator | None = None
-        self.py_sim_active = False 
+        self.py_sim_active = False # This state is managed by MainWindow
 
+        # UI Managers
         self.py_sim_ui_manager = PySimulationUIManager(self)
         self.ai_chat_ui_manager = AIChatUIManager(self)
 
+        # Connect signals from UI managers
         self.py_sim_ui_manager.simulationStateChanged.connect(self._handle_py_sim_state_changed_by_manager)
         self.py_sim_ui_manager.requestGlobalUIEnable.connect(self._handle_py_sim_global_ui_enable_by_manager)
+        # AIChatUIManager connects its own signals internally and updates its UI.
+        # MainWindow actions for AI are connected to AIChatUIManager slots.
 
         self._internet_connected: bool | None = None
         self.internet_check_timer = QTimer(self)
@@ -705,23 +711,24 @@ class MainWindow(QMainWindow):
         self.resource_monitor_worker: ResourceMonitorWorker | None = None
         self.resource_monitor_thread: QThread | None = None
 
-        self.init_ui() 
+        self.init_ui() # This will now call manager's create_dock_widget_contents
 
         try:
-            setup_global_logging(self.log_output) 
+            setup_global_logging(self.log_output) # log_output is part of _create_docks
             logger.info("Main window initialized and logging configured.")
-        except Exception as e: 
+        except Exception as e: # Catch a broader exception if log_output isn't ready
             logger.error(f"Failed to run setup_global_logging: {e}. UI logs might not work.")
 
         self._init_resource_monitor()
 
+        # Initial AI Status (now handled by AIChatUIManager's init via its _connect_ai_chatbot_signals)
         if hasattr(self, 'matlab_status_label'): self.matlab_status_label.setObjectName("MatlabStatusLabel")
         if hasattr(self, 'py_sim_status_label'): self.py_sim_status_label.setObjectName("PySimStatusLabel")
         if hasattr(self, 'internet_status_label'): self.internet_status_label.setObjectName("InternetStatusLabel")
         if hasattr(self, 'status_label'): self.status_label.setObjectName("StatusLabel")
 
         self._update_matlab_status_display(False, "Initializing. Configure MATLAB settings or attempt auto-detect.")
-        self._update_py_sim_status_display() 
+        self._update_py_sim_status_display() # Initial status for main status bar
 
         self.matlab_connection.connectionStatusChanged.connect(self._update_matlab_status_display)
         self.matlab_connection.simulationFinished.connect(self._handle_matlab_modelgen_or_sim_finished)
@@ -732,8 +739,9 @@ class MainWindow(QMainWindow):
         self._init_internet_status_check()
         self.scene.selectionChanged.connect(self._update_properties_dock)
         self._update_properties_dock()
-        self._update_py_simulation_actions_enabled_state() 
+        self._update_py_simulation_actions_enabled_state() # Initial update for MW actions
 
+        # Initial AI status display
         if not self.ai_chatbot_manager.api_key:
             self.ai_chat_ui_manager.update_status_display("Status: API Key required. Configure in Settings.")
         else:
@@ -742,13 +750,12 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         self.setGeometry(50, 50, 1650, 1050)
-        # Corrected: Pass QStyle.SP_DesktopIcon directly as get_standard_icon expects the enum value
-        self.setWindowIcon(get_standard_icon(QStyle.SP_DesktopIcon, "BSM"))
+        self.setWindowIcon(get_standard_icon(self.style(), QStyle.SP_DesktopIcon, "BSM"))
         self._create_central_widget()
         self._create_actions()
         self._create_menus()
         self._create_toolbars()
-        self._create_docks() 
+        self._create_docks() # This now uses the UI managers to populate dock contents
         self._create_status_bar()
         self._update_save_actions_enable_state()
         self._update_matlab_actions_enabled_state()
@@ -762,6 +769,10 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.view)
 
     def _create_actions(self):
+        # Most actions remain the same, ensure they are connected in the UI managers if they
+        # directly manipulate UI elements now owned by those managers,
+        # or ensure the UI managers expose slots that MainWindow actions can trigger.
+
         def _safe_get_style_enum(attr_name, fallback_attr_name=None):
             try: return getattr(QStyle, attr_name)
             except AttributeError:
@@ -769,59 +780,61 @@ class MainWindow(QMainWindow):
                     try: return getattr(QStyle, fallback_attr_name)
                     except AttributeError: pass
                 return QStyle.SP_CustomBase
-        # All calls to get_standard_icon now pass 2 arguments
-        self.new_action = QAction(get_standard_icon(QStyle.SP_FileIcon, "New"), "&New", self, shortcut=QKeySequence.New, statusTip="Create a new file", triggered=self.on_new_file)
-        self.open_action = QAction(get_standard_icon(QStyle.SP_DialogOpenButton, "Opn"), "&Open...", self, shortcut=QKeySequence.Open, statusTip="Open an existing file", triggered=self.on_open_file)
-        self.save_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "Sav"), "&Save", self, shortcut=QKeySequence.Save, statusTip="Save the current file", triggered=self.on_save_file)
+
+        self.new_action = QAction(get_standard_icon(self.style(), QStyle.SP_FileIcon, "New"), "&New", self, shortcut=QKeySequence.New, statusTip="Create a new file", triggered=self.on_new_file)
+        self.open_action = QAction(get_standard_icon(self.style(), QStyle.SP_DialogOpenButton, "Opn"), "&Open...", self, shortcut=QKeySequence.Open, statusTip="Open an existing file", triggered=self.on_open_file)
+        self.save_action = QAction(get_standard_icon(self.style(), QStyle.SP_DialogSaveButton, "Sav"), "&Save", self, shortcut=QKeySequence.Save, statusTip="Save the current file", triggered=self.on_save_file)
         self.save_as_action = QAction(
-            get_standard_icon(_safe_get_style_enum("SP_DriveHDIcon", "SP_DialogSaveButton"), "SA"),
+            get_standard_icon(self.style(), _safe_get_style_enum("SP_DriveHDIcon", "SP_DialogSaveButton"), "SA"),
             "Save &As...", self, shortcut=QKeySequence.SaveAs,
             statusTip="Save the current file with a new name", triggered=self.on_save_file_as
         )
-        self.export_simulink_action = QAction(get_standard_icon(_safe_get_style_enum("SP_ArrowUp","SP_ArrowRight"), "->M"), "&Export to Simulink...", self, triggered=self.on_export_simulink)
-        self.exit_action = QAction(get_standard_icon(QStyle.SP_DialogCloseButton, "Exit"), "E&xit", self, shortcut=QKeySequence.Quit, statusTip="Exit the application", triggered=self.close)
+        self.export_simulink_action = QAction(get_standard_icon(self.style(), _safe_get_style_enum("SP_ArrowUp","SP_ArrowRight"), "->M"), "&Export to Simulink...", self, triggered=self.on_export_simulink)
+        self.exit_action = QAction(get_standard_icon(self.style(), QStyle.SP_DialogCloseButton, "Exit"), "E&xit", self, shortcut=QKeySequence.Quit, statusTip="Exit the application", triggered=self.close)
 
         self.undo_action = self.undo_stack.createUndoAction(self, "&Undo")
         self.undo_action.setShortcut(QKeySequence.Undo)
-        self.undo_action.setIcon(get_standard_icon(QStyle.SP_ArrowBack, "Un"))
+        self.undo_action.setIcon(get_standard_icon(self.style(), QStyle.SP_ArrowBack, "Un"))
         self.redo_action = self.undo_stack.createRedoAction(self, "&Redo")
         self.redo_action.setShortcut(QKeySequence.Redo)
-        self.redo_action.setIcon(get_standard_icon(QStyle.SP_ArrowForward, "Re"))
+        self.redo_action.setIcon(get_standard_icon(self.style(), QStyle.SP_ArrowForward, "Re"))
         self.undo_stack.canUndoChanged.connect(self._update_undo_redo_actions_enable_state)
         self.undo_stack.canRedoChanged.connect(self._update_undo_redo_actions_enable_state)
 
-        self.select_all_action = QAction(get_standard_icon(_safe_get_style_enum("SP_FileDialogListView", "SP_FileDialogDetailedView"), "All"), "Select &All", self, shortcut=QKeySequence.SelectAll, triggered=self.on_select_all)
-        self.delete_action = QAction(get_standard_icon(QStyle.SP_TrashIcon, "Del"), "&Delete", self, shortcut=QKeySequence.Delete, triggered=self.on_delete_selected)
+        self.select_all_action = QAction(get_standard_icon(self.style(), _safe_get_style_enum("SP_FileDialogListView", "SP_FileDialogDetailedView"), "All"), "Select &All", self, shortcut=QKeySequence.SelectAll, triggered=self.on_select_all)
+        self.delete_action = QAction(get_standard_icon(self.style(), QStyle.SP_TrashIcon, "Del"), "&Delete", self, shortcut=QKeySequence.Delete, triggered=self.on_delete_selected)
 
         self.mode_action_group = QActionGroup(self)
         self.mode_action_group.setExclusive(True)
-        self.select_mode_action = QAction(QIcon.fromTheme("edit-select", get_standard_icon(QStyle.SP_ArrowRight, "Sel")), "Select/Move", self, checkable=True, triggered=lambda: self.scene.set_mode("select"))
+        self.select_mode_action = QAction(QIcon.fromTheme("edit-select", get_standard_icon(self.style(), QStyle.SP_ArrowRight, "Sel")), "Select/Move", self, checkable=True, triggered=lambda: self.scene.set_mode("select"))
         self.select_mode_action.setObjectName("select_mode_action")
-        self.add_state_mode_action = QAction(QIcon.fromTheme("draw-rectangle", get_standard_icon(QStyle.SP_FileDialogNewFolder, "St")), "Add State", self, checkable=True, triggered=lambda: self.scene.set_mode("state"))
+        self.add_state_mode_action = QAction(QIcon.fromTheme("draw-rectangle", get_standard_icon(self.style(), QStyle.SP_FileDialogNewFolder, "St")), "Add State", self, checkable=True, triggered=lambda: self.scene.set_mode("state"))
         self.add_state_mode_action.setObjectName("add_state_mode_action")
-        self.add_transition_mode_action = QAction(QIcon.fromTheme("draw-connector", get_standard_icon(QStyle.SP_ArrowForward, "Tr")), "Add Transition", self, checkable=True, triggered=lambda: self.scene.set_mode("transition"))
+        self.add_transition_mode_action = QAction(QIcon.fromTheme("draw-connector", get_standard_icon(self.style(), QStyle.SP_ArrowForward, "Tr")), "Add Transition", self, checkable=True, triggered=lambda: self.scene.set_mode("transition"))
         self.add_transition_mode_action.setObjectName("add_transition_mode_action")
-        self.add_comment_mode_action = QAction(QIcon.fromTheme("insert-text", get_standard_icon(QStyle.SP_MessageBoxInformation, "Cm")), "Add Comment", self, checkable=True, triggered=lambda: self.scene.set_mode("comment"))
+        self.add_comment_mode_action = QAction(QIcon.fromTheme("insert-text", get_standard_icon(self.style(), QStyle.SP_MessageBoxInformation, "Cm")), "Add Comment", self, checkable=True, triggered=lambda: self.scene.set_mode("comment"))
         self.add_comment_mode_action.setObjectName("add_comment_mode_action")
         for action in [self.select_mode_action, self.add_state_mode_action, self.add_transition_mode_action, self.add_comment_mode_action]:
             self.mode_action_group.addAction(action)
         self.select_mode_action.setChecked(True)
 
-        self.run_simulation_action = QAction(get_standard_icon(QStyle.SP_MediaPlay, "Run"), "&Run Simulation (MATLAB)...", self, triggered=self.on_run_simulation)
-        self.generate_code_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "Cde"), "Generate &Code (C/C++ via MATLAB)...", self, triggered=self.on_generate_code)
-        self.matlab_settings_action = QAction(get_standard_icon(QStyle.SP_ComputerIcon, "Cfg"), "&MATLAB Settings...", self, triggered=self.on_matlab_settings)
+        self.run_simulation_action = QAction(get_standard_icon(self.style(), QStyle.SP_MediaPlay, "Run"), "&Run Simulation (MATLAB)...", self, triggered=self.on_run_simulation)
+        self.generate_code_action = QAction(get_standard_icon(self.style(), QStyle.SP_DialogSaveButton, "Cde"), "Generate &Code (C/C++ via MATLAB)...", self, triggered=self.on_generate_code)
+        self.matlab_settings_action = QAction(get_standard_icon(self.style(), QStyle.SP_ComputerIcon, "Cfg"), "&MATLAB Settings...", self, triggered=self.on_matlab_settings)
 
-        self.start_py_sim_action = QAction(get_standard_icon(QStyle.SP_MediaPlay, "Py▶"), "&Start Python Simulation", self, statusTip="Start internal FSM simulation")
-        self.stop_py_sim_action = QAction(get_standard_icon(QStyle.SP_MediaStop, "Py■"), "S&top Python Simulation", self, statusTip="Stop internal FSM simulation", enabled=False)
-        self.reset_py_sim_action = QAction(get_standard_icon(QStyle.SP_MediaSkipBackward, "Py«"), "&Reset Python Simulation", self, statusTip="Reset internal FSM simulation", enabled=False)
+        # Python Simulation Actions (triggered will be connected to PySimulationUIManager slots)
+        self.start_py_sim_action = QAction(get_standard_icon(self.style(), QStyle.SP_MediaPlay, "Py▶"), "&Start Python Simulation", self, statusTip="Start internal FSM simulation")
+        self.stop_py_sim_action = QAction(get_standard_icon(self.style(), QStyle.SP_MediaStop, "Py■"), "S&top Python Simulation", self, statusTip="Stop internal FSM simulation", enabled=False)
+        self.reset_py_sim_action = QAction(get_standard_icon(self.style(), QStyle.SP_MediaSkipBackward, "Py«"), "&Reset Python Simulation", self, statusTip="Reset internal FSM simulation", enabled=False)
 
-        self.openai_settings_action = QAction(get_standard_icon(QStyle.SP_ComputerIcon, "AISet"), "AI Assistant Settings...", self)
-        self.clear_ai_chat_action = QAction(get_standard_icon(QStyle.SP_DialogResetButton, "Clear"), "Clear Chat History", self)
-        self.ask_ai_to_generate_fsm_action = QAction(QIcon.fromTheme("system-run", get_standard_icon(QStyle.SP_DialogYesButton, "AIGen")), "Generate FSM from Description...", self)
+        # AI Chatbot Actions (triggered will be connected to AIChatUIManager slots)
+        self.openai_settings_action = QAction(get_standard_icon(self.style(), QStyle.SP_ComputerIcon, "AISet"), "AI Assistant Settings...", self)
+        self.clear_ai_chat_action = QAction(get_standard_icon(self.style(), QStyle.SP_DialogResetButton, "Clear"), "Clear Chat History", self)
+        self.ask_ai_to_generate_fsm_action = QAction(QIcon.fromTheme("system-run", get_standard_icon(self.style(), QStyle.SP_DialogYesButton, "AIGen")), "Generate FSM from Description...", self)
 
         self.open_example_menu_action = QAction("Open E&xample...", self)
-        self.quick_start_action = QAction(get_standard_icon(QStyle.SP_MessageBoxQuestion, "QS"), "&Quick Start Guide", self, triggered=self.on_show_quick_start)
-        self.about_action = QAction(get_standard_icon(QStyle.SP_DialogHelpButton, "?"), "&About", self, triggered=self.on_about)
+        self.quick_start_action = QAction(get_standard_icon(self.style(), QStyle.SP_MessageBoxQuestion, "QS"), "&Quick Start Guide", self, triggered=self.on_show_quick_start)
+        self.about_action = QAction(get_standard_icon(self.style(), QStyle.SP_DialogHelpButton, "?"), "&About", self, triggered=self.on_about)
 
 
     def _create_menus(self):
@@ -830,7 +843,7 @@ class MainWindow(QMainWindow):
         file_menu = menu_bar.addMenu("&File")
         file_menu.addAction(self.new_action)
         file_menu.addAction(self.open_action)
-        example_menu = file_menu.addMenu(get_standard_icon(QStyle.SP_FileDialogContentsView, "Ex"), "Open E&xample")
+        example_menu = file_menu.addMenu(get_standard_icon(self.style(), QStyle.SP_FileDialogContentsView, "Ex"), "Open E&xample")
         self.open_example_traffic_action = example_menu.addAction("Traffic Light FSM", lambda: self._open_example_file("traffic_light.bsm"))
         self.open_example_toggle_action = example_menu.addAction("Simple Toggle FSM", lambda: self._open_example_file("simple_toggle.bsm"))
         file_menu.addAction(self.save_action)
@@ -847,19 +860,19 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.delete_action)
         edit_menu.addAction(self.select_all_action)
         edit_menu.addSeparator()
-        mode_menu = edit_menu.addMenu(get_standard_icon(QStyle.SP_ToolBarHorizontalExtensionButton, "Mode"),"Interaction Mode")
+        mode_menu = edit_menu.addMenu(get_standard_icon(self.style(), QStyle.SP_ToolBarHorizontalExtensionButton, "Mode"),"Interaction Mode")
         mode_menu.addAction(self.select_mode_action)
         mode_menu.addAction(self.add_state_mode_action)
         mode_menu.addAction(self.add_transition_mode_action)
         mode_menu.addAction(self.add_comment_mode_action)
 
         sim_menu = menu_bar.addMenu("&Simulation")
-        py_sim_menu = sim_menu.addMenu(get_standard_icon(QStyle.SP_MediaPlay, "PyS"), "Python Simulation (Internal)")
+        py_sim_menu = sim_menu.addMenu(get_standard_icon(self.style(), QStyle.SP_MediaPlay, "PyS"), "Python Simulation (Internal)")
         py_sim_menu.addAction(self.start_py_sim_action)
         py_sim_menu.addAction(self.stop_py_sim_action)
         py_sim_menu.addAction(self.reset_py_sim_action)
         sim_menu.addSeparator()
-        matlab_sim_menu = sim_menu.addMenu(get_standard_icon(QStyle.SP_ComputerIcon, "M"), "MATLAB/Simulink")
+        matlab_sim_menu = sim_menu.addMenu(get_standard_icon(self.style(), QStyle.SP_ComputerIcon, "M"), "MATLAB/Simulink")
         matlab_sim_menu.addAction(self.run_simulation_action)
         matlab_sim_menu.addAction(self.generate_code_action)
         matlab_sim_menu.addSeparator()
@@ -922,7 +935,7 @@ class MainWindow(QMainWindow):
     def _create_docks(self):
         self.setDockOptions(QMainWindow.AnimatedDocks | QMainWindow.AllowTabbedDocks | QMainWindow.AllowNestedDocks)
 
-        # Tools Dock
+        # Tools Dock (remains similar, as it controls scene modes directly)
         self.tools_dock = QDockWidget("Tools", self)
         self.tools_dock.setObjectName("ToolsDock")
         self.tools_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -942,13 +955,13 @@ class MainWindow(QMainWindow):
         draggable_group_box = QGroupBox("Drag New Elements")
         draggable_layout = QVBoxLayout(); draggable_layout.setSpacing(5)
         drag_state_btn = DraggableToolButton(" State", "application/x-bsm-tool", "State")
-        drag_state_btn.setIcon(get_standard_icon(QStyle.SP_FileDialogNewFolder, "St"))
+        drag_state_btn.setIcon(get_standard_icon(self.style(), QStyle.SP_FileDialogNewFolder, "St"))
         drag_initial_state_btn = DraggableToolButton(" Initial State", "application/x-bsm-tool", "Initial State")
-        drag_initial_state_btn.setIcon(get_standard_icon(QStyle.SP_ToolBarHorizontalExtensionButton, "ISt"))
+        drag_initial_state_btn.setIcon(get_standard_icon(self.style(), QStyle.SP_ToolBarHorizontalExtensionButton, "ISt"))
         drag_final_state_btn = DraggableToolButton(" Final State", "application/x-bsm-tool", "Final State")
-        drag_final_state_btn.setIcon(get_standard_icon(QStyle.SP_DialogOkButton, "FSt"))
+        drag_final_state_btn.setIcon(get_standard_icon(self.style(), QStyle.SP_DialogOkButton, "FSt"))
         drag_comment_btn = DraggableToolButton(" Comment", "application/x-bsm-tool", "Comment")
-        drag_comment_btn.setIcon(get_standard_icon(QStyle.SP_MessageBoxInformation, "Cm"))
+        drag_comment_btn.setIcon(get_standard_icon(self.style(), QStyle.SP_MessageBoxInformation, "Cm"))
         for btn in [drag_state_btn, drag_initial_state_btn, drag_final_state_btn, drag_comment_btn]:
             btn.setIconSize(QSize(18,18)); draggable_layout.addWidget(btn)
         draggable_group_box.setLayout(draggable_layout); tools_main_layout.addWidget(draggable_group_box)
@@ -957,7 +970,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.LeftDockWidgetArea, self.tools_dock)
         if hasattr(self, 'view_menu'): self.view_menu.addAction(self.tools_dock.toggleViewAction())
 
-        # Properties Dock
+        # Properties Dock (remains similar, interacts with scene selection)
         self.properties_dock = QDockWidget("Properties", self)
         self.properties_dock.setObjectName("PropertiesDock")
         self.properties_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -969,7 +982,7 @@ class MainWindow(QMainWindow):
         self.properties_editor_label.setAlignment(Qt.AlignTop)
         self.properties_editor_label.setStyleSheet(f"padding: 5px; background-color: {COLOR_BACKGROUND_LIGHT}; border: 1px solid {COLOR_BORDER_MEDIUM};")
         properties_layout.addWidget(self.properties_editor_label, 1)
-        self.properties_edit_button = QPushButton(get_standard_icon(QStyle.SP_DialogApplyButton, "Edt"),"Edit Properties")
+        self.properties_edit_button = QPushButton(get_standard_icon(self.style(), QStyle.SP_DialogApplyButton, "Edt"),"Edit Properties")
         self.properties_edit_button.setEnabled(False)
         self.properties_edit_button.clicked.connect(self._on_edit_selected_item_properties_from_dock)
         properties_layout.addWidget(self.properties_edit_button)
@@ -984,15 +997,15 @@ class MainWindow(QMainWindow):
         log_widget = QWidget()
         log_layout = QVBoxLayout(log_widget)
         log_layout.setContentsMargins(5,5,5,5)
-        self.log_output = QTextEdit() 
-        self.log_output.setObjectName("LogOutputWidget") 
+        self.log_output = QTextEdit() # This QTextEdit is passed to logging_setup
+        self.log_output.setObjectName("LogOutputWidget") # Consistent with stylesheet
         self.log_output.setReadOnly(True)
         log_layout.addWidget(self.log_output)
         self.log_dock.setWidget(log_widget)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
         if hasattr(self, 'view_menu'): self.view_menu.addAction(self.log_dock.toggleViewAction())
 
-        # Python Simulation Dock
+        # Python Simulation Dock (content provided by PySimulationUIManager)
         self.py_sim_dock = QDockWidget("Python Simulation", self)
         self.py_sim_dock.setObjectName("PySimDock")
         self.py_sim_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
@@ -1001,7 +1014,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.py_sim_dock)
         if hasattr(self, 'view_menu'): self.view_menu.addAction(self.py_sim_dock.toggleViewAction())
 
-        # AI Chatbot Dock
+        # AI Chatbot Dock (content provided by AIChatUIManager)
         self.ai_chatbot_dock = QDockWidget("AI Chatbot", self)
         self.ai_chatbot_dock.setObjectName("AIChatbotDock")
         self.ai_chatbot_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
@@ -1015,6 +1028,7 @@ class MainWindow(QMainWindow):
 
 
     def _create_status_bar(self):
+        # Unchanged from previous version
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
         self.status_label = QLabel("Ready")
@@ -1035,6 +1049,7 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(self.progress_bar)
 
     def _init_resource_monitor(self):
+        # Unchanged
         self.resource_monitor_thread = QThread(self)
         self.resource_monitor_worker = ResourceMonitorWorker(interval_ms=2000)
         self.resource_monitor_worker.moveToThread(self.resource_monitor_thread)
@@ -1047,27 +1062,52 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(float, float, float, str)
     def _update_resource_display(self, cpu_usage, ram_usage, gpu_util, gpu_name):
+        # Unchanged
         if hasattr(self, 'cpu_status_label'): self.cpu_status_label.setText(f"CPU: {cpu_usage:.1f}%")
         if hasattr(self, 'ram_status_label'): self.ram_status_label.setText(f"RAM: {ram_usage:.1f}%")
         if hasattr(self, 'gpu_status_label'):
             if gpu_util == -1.0: self.gpu_status_label.setText(f"GPU: {gpu_name}")
             elif gpu_util == -2.0: self.gpu_status_label.setText(f"GPU: {gpu_name}")
             else: self.gpu_status_label.setText(f"GPU: {gpu_util:.0f}% ({gpu_name})")
+
+
+    # --- AI Chatbot UI related methods removed, now in AIChatUIManager ---
+    # _handle_fsm_data_from_ai -> handled by AIChatUIManager, calls mw._add_fsm_data_to_scene
+    # _handle_plain_ai_response -> handled by AIChatUIManager
+    # on_send_ai_chat_message -> handled by AIChatUIManager
+    # _update_ai_chat_status -> now AIChatUIManager.update_status_display
+    # _append_to_ai_chat_display -> now AIChatUIManager._append_to_chat_display
+    # on_openai_settings -> handled by AIChatUIManager
+    # on_clear_ai_chat_history -> handled by AIChatUIManager
+    # on_ask_ai_to_generate_fsm -> handled by AIChatUIManager
     
+    # --- Python Simulation UI related methods removed, now in PySimulationUIManager ---
+    # _update_py_simulation_dock_ui -> now PySimulationUIManager.update_dock_ui_contents
+    # _append_to_py_simulation_log -> now PySimulationUIManager.append_to_action_log
+    # _highlight_sim_active_state -> now PySimulationUIManager._highlight_sim_active_state
+    # _highlight_sim_taken_transition -> now PySimulationUIManager._highlight_sim_taken_transition
+    # on_start_py_simulation -> handled by PySimulationUIManager
+    # on_stop_py_simulation -> handled by PySimulationUIManager
+    # on_reset_py_simulation -> handled by PySimulationUIManager
+    # on_step_py_simulation -> handled by PySimulationUIManager
+    # on_trigger_py_event -> handled by PySimulationUIManager
+    
+    # --- Slots for UI Managers to interact with MainWindow state ---
     @pyqtSlot(bool)
     def _handle_py_sim_state_changed_by_manager(self, is_running: bool):
         logger.debug(f"MW: PySim state changed by manager to: {is_running}")
-        self.py_sim_active = is_running 
+        self.py_sim_active = is_running
         self._update_window_title()
-        self._update_py_sim_status_display() 
-        self._update_matlab_actions_enabled_state() 
-        self._update_py_simulation_actions_enabled_state() 
+        self._update_py_sim_status_display() # Update main status bar
+        self._update_matlab_actions_enabled_state() # MATLAB actions depend on py_sim_active
+        self._update_py_simulation_actions_enabled_state() # Update MW's own menu/toolbar actions for PySim
 
     @pyqtSlot(bool)
     def _handle_py_sim_global_ui_enable_by_manager(self, enable: bool):
         logger.debug(f"MW: Global UI enable requested by PySim manager: {enable}")
-        is_editable = enable 
+        is_editable = enable # If sim is running, UI is generally not editable
 
+        # Actions that are purely for editing the diagram
         diagram_editing_actions = [
             self.new_action, self.open_action, self.save_action, self.save_as_action,
             self.undo_action, self.redo_action, self.delete_action, self.select_all_action,
@@ -1080,18 +1120,21 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'properties_edit_button'):
              self.properties_edit_button.setEnabled(is_editable and len(self.scene.selectedItems())==1)
         
-        for item in self.scene.items(): 
+        for item in self.scene.items(): # Make items non-movable during simulation
             if isinstance(item, (GraphicsStateItem, GraphicsCommentItem)):
                 item.setFlag(QGraphicsItem.ItemIsMovable, is_editable and self.scene.current_mode == "select")
         
+        # Scene mode itself might need to be forced to "select" if sim is running
         if not is_editable and self.scene.current_mode != "select":
-            self.scene.set_mode("select") 
+            self.scene.set_mode("select") # Force select mode during simulation
         
-        self._update_matlab_actions_enabled_state() 
-        self._update_py_simulation_actions_enabled_state()
+        self._update_matlab_actions_enabled_state() # Update based on new global editability
+        self._update_py_simulation_actions_enabled_state() # Update MW's actions
 
 
     def _add_fsm_data_to_scene(self, fsm_data: dict, clear_current_diagram: bool = False, original_user_prompt: str = "AI Generated FSM"):
+        # This method remains in MainWindow as it directly interacts with the scene and undo stack.
+        # Unchanged from previous version (except logging calls potentially)
         logger.info("MW: ADD_FSM_TO_SCENE clear_current_diagram=%s", clear_current_diagram)
         logger.debug("MW: Received FSM Data (states: %d, transitions: %d)",
                      len(fsm_data.get('states',[])), len(fsm_data.get('transitions',[])))
@@ -1110,7 +1153,7 @@ class MainWindow(QMainWindow):
 
         layout_start_x, layout_start_y = 100, 100
         default_item_width, default_item_height = 120, 60
-        GV_SCALE = 1.2 
+        GV_SCALE = 1.2
 
         G = pgv.AGraph(directed=True, strict=False, rankdir='TB', ratio='auto', nodesep='0.75', ranksep='1.2 equally')
         for state_data in fsm_data.get('states', []):
@@ -1131,8 +1174,7 @@ class MainWindow(QMainWindow):
             else: logger.warning("MW: Graphviz - No valid positions extracted for AI FSM nodes.")
         except Exception as e:
             logger.error("MW: Graphviz layout error for AI FSM: %s. Falling back to grid.", str(e).strip() or "Unknown", exc_info=True)
-            if hasattr(self, 'ai_chat_ui_manager') and self.ai_chat_ui_manager:
-                self.ai_chat_ui_manager._append_to_chat_display("System", f"Warning: AI FSM layout failed. Using basic grid.")
+            self.ai_chat_ui_manager._append_to_chat_display("System", f"Warning: AI FSM layout failed. Using basic grid.") # Use manager's append
             graphviz_positions = {}
 
         for i, state_data in enumerate(fsm_data.get('states', [])):
@@ -1190,23 +1232,22 @@ class MainWindow(QMainWindow):
         else: logger.info("MW: No valid AI items generated to add.")
 
         if not clear_current_diagram and items_to_add_for_undo_command: self.undo_stack.endMacro()
-        elif not clear_current_diagram: self.undo_stack.endMacro() 
+        elif not clear_current_diagram: self.undo_stack.endMacro() # End macro even if nothing added
 
-        if self.py_sim_active and items_to_add_for_undo_command: # Check MW's py_sim_active
+        if self.py_sim_active and items_to_add_for_undo_command:
             logger.info("MW: Reinitializing Python simulation after adding AI FSM.")
             try:
                 self.py_fsm_engine = FSMSimulator(self.scene.get_diagram_data()['states'], self.scene.get_diagram_data()['transitions'])
-                if self.py_sim_ui_manager:
-                    self.py_sim_ui_manager.append_to_action_log(["Python FSM Simulation reinitialized for new diagram from AI."])
-                    self.py_sim_ui_manager.update_dock_ui_contents()
+                self.py_sim_ui_manager.append_to_action_log(["Python FSM Simulation reinitialized for new diagram from AI."])
+                self.py_sim_ui_manager.update_dock_ui_contents()
             except FSMError as e:
-                if self.py_sim_ui_manager:
-                    self.py_sim_ui_manager.append_to_action_log([f"ERROR Re-initializing Sim after AI: {e}"])
-                    self.py_sim_ui_manager.on_stop_py_simulation(silent=True) 
+                self.py_sim_ui_manager.append_to_action_log([f"ERROR Re-initializing Sim after AI: {e}"])
+                self.py_sim_ui_manager.on_stop_py_simulation(silent=True) # Use manager's stop
         logger.debug("MW: ADD_FSM_TO_SCENE processing finished. Items involved: %d", len(items_to_add_for_undo_command))
 
 
     def _fit_view_to_new_ai_items(self):
+        # Unchanged
         if not self.scene.items(): return
         items_bounds = self.scene.itemsBoundingRect()
         if self.view and not items_bounds.isNull():
@@ -1215,12 +1256,14 @@ class MainWindow(QMainWindow):
         elif self.view and self.scene.sceneRect(): self.view.centerOn(self.scene.sceneRect().center())
 
     def on_matlab_settings(self):
+        # Unchanged
         dialog = MatlabSettingsDialog(matlab_connection=self.matlab_connection, parent=self)
         dialog.exec()
         logger.info("MATLAB settings dialog closed.")
 
 
     def _update_properties_dock(self):
+        # Unchanged (interacts with scene directly)
         selected_items = self.scene.selectedItems()
         html_content, edit_enabled, item_type_tooltip = "", False, "item"
         if len(selected_items) == 1:
@@ -1246,7 +1289,7 @@ class MainWindow(QMainWindow):
                 if props.get('description'): rows += f"<tr><td colspan='2'><b>Desc:</b> {fmt(props.get('description'), 50)}</td></tr>"
             elif isinstance(item, GraphicsCommentItem): rows += f"<tr><td colspan='2'><b>Text:</b> {fmt(props.get('text', ''), 60)}</td></tr>"
             else: rows, item_type_name = "<tr><td>Unknown Item Type</td></tr>", "Unknown"
-            html_content = f"""<div style='font-family:"Segoe UI",Arial;font-size:9pt;line-height:1.5;'><h4 style='margin:0 0 5px 0;padding:2px 0;color:{COLOR_ACCENT_PRIMARY};border-bottom:1px solid {COLOR_BORDER_LIGHT};'>Type: {item_type_name}</h4><table style='width:100%;border-collapse:collapse;'>{rows}</table></div>"""
+            html_content = f"""<div style='font-family:"Segoe UI",Arial;font-size:9pt;line-height:1.5;'><h4 style='margin:0 0 5px 0;padding:2px 0;color:{COLOR_ACCENT_PRIMARY.name()};border-bottom:1px solid {COLOR_BORDER_LIGHT.name()};'>Type: {item_type_name}</h4><table style='width:100%;border-collapse:collapse;'>{rows}</table></div>"""
         elif len(selected_items) > 1: html_content, item_type_tooltip = f"<i><b>{len(selected_items)} items selected.</b><br>Select single item.</i>", f"{len(selected_items)} items"
         else: html_content = "<i>No item selected.</i><br><small>Click an item or use tools to add.</small>"
         self.properties_editor_label.setText(html_content)
@@ -1254,25 +1297,30 @@ class MainWindow(QMainWindow):
         self.properties_edit_button.setToolTip(f"Edit properties of selected {item_type_tooltip}" if edit_enabled else "Select single item to enable")
 
     def _on_edit_selected_item_properties_from_dock(self):
+        # Unchanged
         selected = self.scene.selectedItems()
         if len(selected) == 1: self.scene.edit_item_properties(selected[0])
 
     def _update_window_title(self):
+        # Unchanged
         file_name = os.path.basename(self.current_file_path) if self.current_file_path else "Untitled"
         title = f"{APP_NAME} - {file_name}{' [PySim Running]' if self.py_sim_active else ''}"
         self.setWindowTitle(title + "[*]")
         if hasattr(self, 'status_label'): self.status_label.setText(f"File: {file_name}{' *' if self.isWindowModified() else ''} | PySim: {'Active' if self.py_sim_active else 'Idle'}")
 
     def _update_save_actions_enable_state(self):
+        # Unchanged
         self.save_action.setEnabled(self.isWindowModified())
 
     def _update_undo_redo_actions_enable_state(self):
+        # Unchanged
         self.undo_action.setEnabled(self.undo_stack.canUndo())
         self.redo_action.setEnabled(self.undo_stack.canRedo())
         self.undo_action.setText(f"&Undo {self.undo_stack.undoText()}" if self.undo_stack.undoText() else "&Undo")
         self.redo_action.setText(f"&Redo {self.undo_stack.redoText()}" if self.undo_stack.redoText() else "&Redo")
 
     def _update_matlab_status_display(self, connected, message):
+        # Unchanged
         text, tooltip = f"MATLAB: {'Connected' if connected else 'Not Connected'}", f"MATLAB Status: {message}"
         if hasattr(self, 'matlab_status_label'):
             self.matlab_status_label.setText(text); self.matlab_status_label.setToolTip(tooltip)
@@ -1281,33 +1329,39 @@ class MainWindow(QMainWindow):
         self._update_matlab_actions_enabled_state()
 
     def _update_matlab_actions_enabled_state(self):
+        # Updated: Now also checks `py_sim_active` state managed by MainWindow
         can_run_matlab = self.matlab_connection.connected and not self.py_sim_active
         for action in [self.export_simulink_action, self.run_simulation_action, self.generate_code_action]:
             action.setEnabled(can_run_matlab)
         self.matlab_settings_action.setEnabled(not self.py_sim_active)
 
     def _start_matlab_operation(self, operation_name):
+        # Unchanged
         logging.info("MATLAB Op: %s starting...", operation_name)
         if hasattr(self, 'status_label'): self.status_label.setText(f"Running: {operation_name}...")
         if hasattr(self, 'progress_bar'): self.progress_bar.setVisible(True)
         self.set_ui_enabled_for_matlab_op(False)
 
     def _finish_matlab_operation(self):
+        # Unchanged
         if hasattr(self, 'progress_bar'): self.progress_bar.setVisible(False)
         if hasattr(self, 'status_label'): self.status_label.setText("Ready")
         self.set_ui_enabled_for_matlab_op(True)
         logging.info("MATLAB Op: Finished processing.")
 
     def set_ui_enabled_for_matlab_op(self, enabled: bool):
+        # Updated: Calls `_update_py_simulation_actions_enabled_state`
         if hasattr(self, 'menuBar'): self.menuBar().setEnabled(enabled)
         for child in self.findChildren(QToolBar): child.setEnabled(enabled)
         if self.centralWidget(): self.centralWidget().setEnabled(enabled)
         for dock_name in ["ToolsDock", "PropertiesDock", "LogDock", "PySimDock", "AIChatbotDock"]:
             dock = self.findChild(QDockWidget, dock_name)
             if dock: dock.setEnabled(enabled)
+        # This is important because enabling/disabling MATLAB ops can affect PySim actions
         self._update_py_simulation_actions_enabled_state()
 
     def _handle_matlab_modelgen_or_sim_finished(self, success, message, data):
+        # Unchanged
         self._finish_matlab_operation()
         logging.log(logging.INFO if success else logging.ERROR, "MATLAB Result: %s", message)
         if success:
@@ -1316,6 +1370,7 @@ class MainWindow(QMainWindow):
         else: QMessageBox.warning(self, "MATLAB Operation Failed", message)
 
     def _handle_matlab_codegen_finished(self, success, message, output_dir):
+        # Unchanged
         self._finish_matlab_operation()
         logging.log(logging.INFO if success else logging.ERROR, "MATLAB Code Gen Result: %s", message)
         if success and output_dir:
@@ -1330,6 +1385,7 @@ class MainWindow(QMainWindow):
         elif not success: QMessageBox.warning(self, "Code Gen Failed", message)
 
     def _prompt_save_if_dirty(self) -> bool:
+        # Unchanged
         if not self.isWindowModified(): return True
         if self.py_sim_active: QMessageBox.warning(self, "Sim Active", "Stop Python sim before save/open."); return False
         reply = QMessageBox.question(self, "Save Changes?", f"'{os.path.basename(self.current_file_path or 'Untitled')}' has unsaved changes. Save?", QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
@@ -1337,8 +1393,9 @@ class MainWindow(QMainWindow):
         return reply != QMessageBox.Cancel
 
     def on_new_file(self, silent=False):
+        # Updated: Calls manager's on_stop_py_simulation
         if not silent and not self._prompt_save_if_dirty(): return False
-        if self.py_sim_ui_manager: self.py_sim_ui_manager.on_stop_py_simulation(silent=True) 
+        self.py_sim_ui_manager.on_stop_py_simulation(silent=True) # Use manager's method
         self.scene.clear(); self.scene.setSceneRect(0,0,6000,4500)
         self.current_file_path = self.last_generated_model_path = None
         self.undo_stack.clear(); self.scene.set_dirty(False); self.setWindowModified(False)
@@ -1349,8 +1406,9 @@ class MainWindow(QMainWindow):
         return True
 
     def on_open_file(self):
+        # Updated: Calls manager's on_stop_py_simulation
         if not self._prompt_save_if_dirty(): return
-        if self.py_sim_ui_manager: self.py_sim_ui_manager.on_stop_py_simulation(silent=True)
+        self.py_sim_ui_manager.on_stop_py_simulation(silent=True) # Use manager's method
         start_dir = os.path.dirname(self.current_file_path or QDir.homePath())
         file_path, _ = QFileDialog.getOpenFileName(self, "Open BSM File", start_dir, FILE_FILTER)
         if file_path:
@@ -1365,6 +1423,7 @@ class MainWindow(QMainWindow):
             else: QMessageBox.critical(self, "Error Opening", f"Could not load: {file_path}"); logging.error("Failed to open: %s", file_path)
 
     def _load_from_path(self, file_path):
+        # Unchanged
         try:
             with open(file_path, 'r', encoding='utf-8') as f: data = json.load(f)
             if not isinstance(data, dict) or 'states' not in data or 'transitions' not in data:
@@ -1374,10 +1433,12 @@ class MainWindow(QMainWindow):
         except Exception as e: logging.error("Error loading %s: %s", file_path, e, exc_info=True); return False
 
     def on_save_file(self) -> bool:
+        # Unchanged
         if not self.current_file_path: return self.on_save_file_as()
         return self._save_to_path(self.current_file_path)
 
     def on_save_file_as(self) -> bool:
+        # Unchanged
         start_path = self.current_file_path or os.path.join(QDir.homePath(), "untitled" + FILE_EXTENSION)
         file_path, _ = QFileDialog.getSaveFileName(self, "Save BSM File As", start_path, FILE_FILTER)
         if file_path:
@@ -1386,6 +1447,7 @@ class MainWindow(QMainWindow):
         return False
 
     def _save_to_path(self, file_path) -> bool:
+        # Unchanged
         if self.py_sim_active: QMessageBox.warning(self, "Sim Active", "Stop Python sim before saving."); return False
         save_file = QSaveFile(file_path)
         if not save_file.open(QIODevice.WriteOnly | QIODevice.Text):
@@ -1406,15 +1468,16 @@ class MainWindow(QMainWindow):
     def on_delete_selected(self): self.scene.delete_selected_items()
 
     def on_export_simulink(self):
+        # Unchanged
         if not self.matlab_connection.connected: QMessageBox.warning(self, "MATLAB Not Connected", "Configure MATLAB."); return
         if self.py_sim_active: QMessageBox.warning(self, "PySim Active", "Stop Python sim first."); return
-        dialog = QDialog(self); dialog.setWindowTitle("Export to Simulink"); dialog.setWindowIcon(get_standard_icon(QStyle.SP_ArrowUp, "->M"))
+        dialog = QDialog(self); dialog.setWindowTitle("Export to Simulink"); dialog.setWindowIcon(get_standard_icon(self.style(), QStyle.SP_ArrowUp, "->M"))
         layout = QFormLayout(dialog); layout.setSpacing(8); layout.setContentsMargins(10,10,10,10)
         name_base = os.path.splitext(os.path.basename(self.current_file_path or "BSM_Model"))[0]
         name_def = "".join(c if c.isalnum() or c=='_' else '_' for c in name_base); name_def = ("Mdl_" + name_def) if not name_def or not name_def[0].isalpha() else name_def.replace('-','_')
         name_edit = QLineEdit(name_def); layout.addRow("Model Name:", name_edit)
         out_dir_def = os.path.dirname(self.current_file_path or QDir.homePath()); out_dir_edit = QLineEdit(out_dir_def)
-        browse_btn = QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon,"Brw")," Browse..."); browse_btn.clicked.connect(lambda: out_dir_edit.setText(QFileDialog.getExistingDirectory(dialog, "Select Output Dir", out_dir_edit.text()) or out_dir_edit.text()))
+        browse_btn = QPushButton(get_standard_icon(self.style(), QStyle.SP_DirOpenIcon,"Brw")," Browse..."); browse_btn.clicked.connect(lambda: out_dir_edit.setText(QFileDialog.getExistingDirectory(dialog, "Select Output Dir", out_dir_edit.text()) or out_dir_edit.text()))
         dir_layout = QHBoxLayout(); dir_layout.addWidget(out_dir_edit, 1); dir_layout.addWidget(browse_btn); layout.addRow("Output Dir:", dir_layout)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel); btns.accepted.connect(dialog.accept); btns.rejected.connect(dialog.reject); layout.addRow(btns); dialog.setMinimumWidth(450)
         if dialog.exec() == QDialog.Accepted:
@@ -1428,6 +1491,7 @@ class MainWindow(QMainWindow):
             self.matlab_connection.generate_simulink_model(self.scene.get_diagram_data()['states'], self.scene.get_diagram_data()['transitions'], out_dir, model_name)
 
     def on_run_simulation(self):
+        # Unchanged
         if not self.matlab_connection.connected: QMessageBox.warning(self, "MATLAB Not Connected", "Configure MATLAB."); return
         if self.py_sim_active: QMessageBox.warning(self, "PySim Active", "Stop Python sim first."); return
         default_dir = os.path.dirname(self.last_generated_model_path or self.current_file_path or QDir.homePath())
@@ -1440,17 +1504,18 @@ class MainWindow(QMainWindow):
         self.matlab_connection.run_simulation(model_path, sim_time)
 
     def on_generate_code(self):
+        # Unchanged
         if not self.matlab_connection.connected: QMessageBox.warning(self, "MATLAB Not Connected", "Configure MATLAB."); return
         if self.py_sim_active: QMessageBox.warning(self, "PySim Active", "Stop Python sim first."); return
         default_dir = os.path.dirname(self.last_generated_model_path or self.current_file_path or QDir.homePath())
         model_path, _ = QFileDialog.getOpenFileName(self, "Select Simulink Model for Code Gen", default_dir, "Simulink Models (*.slx);;All (*)")
         if not model_path: return
         self.last_generated_model_path = model_path
-        dialog = QDialog(self); dialog.setWindowTitle("Code Gen Options"); dialog.setWindowIcon(get_standard_icon(QStyle.SP_DialogSaveButton, "Cde"))
+        dialog = QDialog(self); dialog.setWindowTitle("Code Gen Options"); dialog.setWindowIcon(get_standard_icon(self.style(), QStyle.SP_DialogSaveButton, "Cde"))
         layout = QFormLayout(dialog); layout.setSpacing(8); layout.setContentsMargins(10,10,10,10)
         lang_combo = QComboBox(); lang_combo.addItems(["C", "C++"]); lang_combo.setCurrentText("C++"); layout.addRow("Target Language:", lang_combo)
         out_dir_edit = QLineEdit(os.path.dirname(model_path))
-        browse_btn = QPushButton(get_standard_icon(QStyle.SP_DirOpenIcon, "Brw")," Browse..."); browse_btn.clicked.connect(lambda: out_dir_edit.setText(QFileDialog.getExistingDirectory(dialog, "Select Base Output Dir", out_dir_edit.text()) or out_dir_edit.text()))
+        browse_btn = QPushButton(get_standard_icon(self.style(), QStyle.SP_DirOpenIcon, "Brw")," Browse..."); browse_btn.clicked.connect(lambda: out_dir_edit.setText(QFileDialog.getExistingDirectory(dialog, "Select Base Output Dir", out_dir_edit.text()) or out_dir_edit.text()))
         dir_layout = QHBoxLayout(); dir_layout.addWidget(out_dir_edit, 1); dir_layout.addWidget(browse_btn); layout.addRow("Base Output Dir:", dir_layout)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel); btns.accepted.connect(dialog.accept); btns.rejected.connect(dialog.reject); layout.addRow(btns); dialog.setMinimumWidth(450)
         if dialog.exec() == QDialog.Accepted:
@@ -1462,6 +1527,7 @@ class MainWindow(QMainWindow):
             self.matlab_connection.generate_code(model_path, language, out_dir_base)
 
     def _get_bundled_file_path(self, filename: str) -> str | None:
+        # Unchanged
         base_path = sys._MEIPASS if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS') else (os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__)))
         for sub in ['', 'docs', 'resources', 'examples']:
             path_check = os.path.join(base_path, sub, filename)
@@ -1469,6 +1535,7 @@ class MainWindow(QMainWindow):
         logger.warning("Bundled file '%s' not found near %s.", filename, base_path); return None
 
     def _open_example_file(self, filename: str):
+        # Unchanged
         if not self._prompt_save_if_dirty(): return
         example_path = self._get_bundled_file_path(filename)
         if example_path and os.path.exists(example_path):
@@ -1484,38 +1551,32 @@ class MainWindow(QMainWindow):
         else: QMessageBox.warning(self, "Example Not Found", f"'{filename}' not found."); logging.warning("Example '%s' not found at: %s", filename, example_path)
 
     def on_show_quick_start(self):
+        # Unchanged
         guide_path = self._get_bundled_file_path("QUICK_START.html")
         if guide_path and not QDesktopServices.openUrl(QUrl.fromLocalFile(guide_path)):
             QMessageBox.warning(self, "Could Not Open", f"Failed to open quick start. Path: {guide_path}"); logging.warning("Failed to open quick start: %s", guide_path)
         elif not guide_path: QMessageBox.information(self, "Not Found", "Quick start guide not found.")
 
     def on_about(self):
-        QMessageBox.about(self, f"About {APP_NAME}", f"""<h3 style='color:{COLOR_ACCENT_PRIMARY};'>{APP_NAME} v{APP_VERSION}</h3><p>Graphical FSM tool.</p><ul><li>Visual design & editing.</li><li>Python simulation.</li><li>MATLAB/Simulink integration.</li><li>AI Assistant.</li></ul><p style='font-size:8pt;color:{COLOR_TEXT_SECONDARY};'>For research/education. Verify outputs.</p>""")
+        # Unchanged
+        QMessageBox.about(self, f"About {APP_NAME}", f"""<h3 style='color:{COLOR_ACCENT_PRIMARY.name()};'>{APP_NAME} v{APP_VERSION}</h3><p>Graphical FSM tool.</p><ul><li>Visual design & editing.</li><li>Python simulation.</li><li>MATLAB/Simulink integration.</li><li>AI Assistant.</li></ul><p style='font-size:8pt;color:{COLOR_TEXT_SECONDARY};'>For research/education. Verify outputs.</p>""")
 
     def closeEvent(self, event: QCloseEvent):
-        if self.py_sim_ui_manager: self.py_sim_ui_manager.on_stop_py_simulation(silent=True) 
+        # Updated: Calls manager's stop methods
+        self.py_sim_ui_manager.on_stop_py_simulation(silent=True) # Use manager's stop
         if self.internet_check_timer and self.internet_check_timer.isActive(): self.internet_check_timer.stop()
         if self.ai_chatbot_manager: self.ai_chatbot_manager.stop_chatbot()
 
         if self.resource_monitor_worker and self.resource_monitor_thread:
             logger.info("Stopping resource monitor...")
             if self.resource_monitor_thread.isRunning():
-                # Ensure stop_monitoring is called in the worker's thread context
                 QMetaObject.invokeMethod(self.resource_monitor_worker, "stop_monitoring", Qt.QueuedConnection)
-                self.resource_monitor_thread.quit() # Asks the event loop to finish
-                # Wait for interval_ms + a small buffer to allow the worker's loop to finish
-                wait_time = 2200 # Default wait time if worker or attribute is missing
-                if self.resource_monitor_worker and hasattr(self.resource_monitor_worker, 'interval_ms'):
-                     wait_time = self.resource_monitor_worker.interval_ms + 200 # e.g., 2000 + 200 = 2200
-
+                self.resource_monitor_thread.quit()
+                wait_time = self.resource_monitor_worker.interval_ms + 200 if self.resource_monitor_worker else 2200
                 if not self.resource_monitor_thread.wait(wait_time): 
-                    logger.warning("Resource monitor thread did not quit gracefully. Terminating.")
-                    self.resource_monitor_thread.terminate() 
-                    self.resource_monitor_thread.wait(100) 
-                else:
-                    logger.info("Resource monitor thread stopped.")
-            self.resource_monitor_worker = None # Help with garbage collection
-            self.resource_monitor_thread = None # Help with garbage collection
+                    logger.warning("Resource monitor thread termination timeout."); self.resource_monitor_thread.terminate(); self.resource_monitor_thread.wait(100)
+                else: logger.info("Resource monitor thread stopped.")
+            self.resource_monitor_worker = self.resource_monitor_thread = None
 
         if self._prompt_save_if_dirty():
             if self.matlab_connection and hasattr(self.matlab_connection, '_active_threads') and self.matlab_connection._active_threads:
@@ -1523,14 +1584,16 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             event.ignore()
-            if self.internet_check_timer: self.internet_check_timer.start()
+            if self.internet_check_timer: self.internet_check_timer.start() # Restart if close cancelled
 
     def _init_internet_status_check(self):
+        # Unchanged
         self.internet_check_timer.timeout.connect(self._run_internet_check_job)
         self.internet_check_timer.start(15000)
         QTimer.singleShot(100, self._run_internet_check_job)
 
     def _run_internet_check_job(self):
+        # Unchanged
         current_status, status_detail = False, "Checking..."
         try:
             s = socket.create_connection(("8.8.8.8", 53), timeout=1.5); s.close(); current_status, status_detail = True, "Connected"
@@ -1540,16 +1603,18 @@ class MainWindow(QMainWindow):
             self._internet_connected = current_status; self._update_internet_status_display(current_status, status_detail)
 
     def _update_internet_status_display(self, is_connected: bool, message_detail: str):
+        # Unchanged
         full_status = f"Internet: {message_detail}"
         if hasattr(self, 'internet_status_label'):
             self.internet_status_label.setText(full_status)
-            host_tip = socket.getfqdn('8.8.8.8') if is_connected else '8.8.8.8'
+            host_tip = socket.getfqdn('8.8.8.8') if is_connected else '8.8.8.8' # Simplified
             self.internet_status_label.setToolTip(f"{full_status} (Checks {host_tip}:53)")
             self.internet_status_label.setStyleSheet(f"padding:0 5px;color:{COLOR_PY_SIM_STATE_ACTIVE.name() if is_connected else '#D32F2F'};")
         logging.debug("Internet Status: %s", message_detail)
         if hasattr(self.ai_chatbot_manager, 'set_online_status'): self.ai_chatbot_manager.set_online_status(is_connected)
 
     def _update_py_sim_status_display(self):
+        # Updates the MAIN status bar label for PySim
         if hasattr(self, 'py_sim_status_label'):
             if self.py_sim_active and self.py_fsm_engine:
                 state_name = self.py_fsm_engine.get_current_state_name()
@@ -1560,18 +1625,22 @@ class MainWindow(QMainWindow):
                 self.py_sim_status_label.setStyleSheet("font-weight:normal;padding:0 5px;")
 
     def _update_py_simulation_actions_enabled_state(self):
+        # Updates MainWindow's menu/toolbar actions for PySim.
+        # Dock internal buttons are managed by PySimulationUIManager.
         is_matlab_op_running = self.progress_bar.isVisible() if hasattr(self, 'progress_bar') else False
-        sim_inactive = not self.py_sim_active 
+        sim_inactive = not self.py_sim_active # py_sim_active is MainWindow's truth
 
         self.start_py_sim_action.setEnabled(sim_inactive and not is_matlab_op_running)
         self.stop_py_sim_action.setEnabled(self.py_sim_active and not is_matlab_op_running)
         self.reset_py_sim_action.setEnabled(self.py_sim_active and not is_matlab_op_running)
         
+        # Trigger the UI manager to update its own controls based on the main sim state
         if self.py_sim_ui_manager:
             self.py_sim_ui_manager._update_internal_controls_enabled_state()
 
 
     def log_message(self, level_str: str, message: str):
+        # Unchanged, uses global logger
         level = getattr(logging, level_str.upper(), logging.INFO)
         logger.log(level, message)
 
@@ -1591,3 +1660,4 @@ if __name__ == '__main__':
     main_win = MainWindow()
     main_win.show()
     sys.exit(app.exec_())
+

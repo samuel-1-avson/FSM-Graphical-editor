@@ -1504,14 +1504,14 @@ class MainWindow(QMainWindow):
                 QMetaObject.invokeMethod(self.resource_monitor_worker, "stop_monitoring", Qt.QueuedConnection)
                 self.resource_monitor_thread.quit() # Asks the event loop to finish
                 # Wait for interval_ms + a small buffer to allow the worker's loop to finish
-                wait_time = 2200 # Default wait time if worker or attribute is missing
-                if self.resource_monitor_worker and hasattr(self.resource_monitor_worker, 'interval_ms'):
-                     wait_time = self.resource_monitor_worker.interval_ms + 200 # e.g., 2000 + 200 = 2200
+                wait_time = self.resource_monitor_worker.interval_ms + 200 if self.resource_monitor_worker else 2200 # Default wait time
+                if hasattr(self.resource_monitor_worker, 'interval_ms'): # Check if attribute exists
+                     wait_time = self.resource_monitor_worker.interval_ms + 200
 
                 if not self.resource_monitor_thread.wait(wait_time): 
                     logger.warning("Resource monitor thread did not quit gracefully. Terminating.")
-                    self.resource_monitor_thread.terminate() 
-                    self.resource_monitor_thread.wait(100) 
+                    self.resource_monitor_thread.terminate() # Forceful stop
+                    self.resource_monitor_thread.wait(100) # Brief wait after terminate
                 else:
                     logger.info("Resource monitor thread stopped.")
             self.resource_monitor_worker = None # Help with garbage collection
