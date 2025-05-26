@@ -1,3 +1,4 @@
+--- START OF FILE bsm_designer_project/ui_ai_chatbot_manager.py ---
 
 # bsm_designer_project/ui_ai_chatbot_manager.py
 import html

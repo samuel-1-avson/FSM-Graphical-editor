@@ -1,5 +1,3 @@
-
-
 from PyQt5.QtGui import QColor
 
 # --- Configuration ---
@@ -188,7 +186,7 @@ STYLE_SHEET_GLOBAL = f"""
     QStatusBar::item {{
         border: none;
     }}
-    QLabel#StatusLabel, QLabel#MatlabStatusLabel, QLabel#PySimStatusLabel, QLabel#AIChatStatusLabel, QLabel#InternetStatusLabel {{
+    QLabel#StatusLabel, QLabel#MatlabStatusLabel, QLabel#PySimStatusLabel {{
          padding: 0px 5px;
     }}
     QDialog {{
@@ -316,7 +314,7 @@ STYLE_SHEET_GLOBAL = f"""
         border-radius: 3px;
         background-color: {COLOR_ACCENT_PRIMARY};
     }}
-    QTextEdit#LogOutputWidget, QTextEdit#PySimActionLog, QTextEdit#AIChatDisplay {{
+    QTextEdit#LogOutputWidget, QTextEdit#PySimActionLog {{
          font-family: Consolas, 'Courier New', monospace;
          background-color: #263238;
          color: #CFD8DC;
@@ -405,16 +403,5 @@ STYLE_SHEET_GLOBAL = f"""
         padding: 4px;
         border: 1px solid {COLOR_BORDER_LIGHT};
         font-weight: bold;
-    }}
-    QDockWidget#AIChatbotDock QPushButton#AIChatSendButton {{
-        background-color: {COLOR_ACCENT_PRIMARY}; color: {COLOR_TEXT_ON_ACCENT};
-    }}
-    QDockWidget#AIChatbotDock QPushButton#AIChatSendButton:hover {{
-        background-color: #1E88E5;
-    }}
-    QDockWidget#AIChatbotDock QPushButton#AIChatSendButton:disabled {{
-        background-color: #E0E0E0;
-        color: #9E9E9E;
-        border-color: #BDBDBD;
     }}
 """

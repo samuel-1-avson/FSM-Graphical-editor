@@ -1,4 +1,4 @@
-
+--- START OF FILE bsm_designer_project/ai_chatbot.py ---
 
 
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, QTime, QTimer, Qt, QMetaObject, pyqtSlot, Q_ARG
@@ -435,3 +435,4 @@ class AIChatbotManager(QObject):
                 self.statusUpdate.emit("Status: Online, API Key required.")
             else:
                 self.statusUpdate.emit("Status: Offline, API Key required.")
+--- END OF FILE bsm_designer_project/ai_chatbot.py ---

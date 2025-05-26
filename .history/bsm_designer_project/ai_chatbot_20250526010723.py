@@ -1,6 +1,3 @@
-
-
-
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, QTime, QTimer, Qt, QMetaObject, pyqtSlot, Q_ARG
 import openai
 import json
@@ -346,8 +343,8 @@ class AIChatbotManager(QObject):
         if not self.api_key:
             logger.warning("MGR_PREP_SEND: API Key not set.")
             self.errorOccurred.emit("API Key not set. Configure in Settings.")
-            if self.parent_window and hasattr(self.parent_window, 'ai_chat_ui_manager') and self.parent_window.ai_chat_ui_manager:
-                self.parent_window.ai_chat_ui_manager._append_to_chat_display("System Error", "API Key not set.")
+            if self.parent_window and hasattr(self.parent_window, '_append_to_ai_chat_display'):
+                self.parent_window._append_to_ai_chat_display("System Error", "API Key not set.")
             return
 
         if not self.chatbot_worker or not self.chatbot_thread or not self.chatbot_thread.isRunning():
@@ -358,8 +355,8 @@ class AIChatbotManager(QObject):
             
             if not self.chatbot_worker or not self.chatbot_thread or not self.chatbot_thread.isRunning():
                 self.errorOccurred.emit("AI Assistant is not ready. Please wait or check settings.")
-                if self.parent_window and hasattr(self.parent_window, 'ai_chat_ui_manager') and self.parent_window.ai_chat_ui_manager:
-                    self.parent_window.ai_chat_ui_manager._append_to_chat_display("System Error", "AI Assistant is not ready.")
+                if self.parent_window and hasattr(self.parent_window, '_append_to_ai_chat_display'):
+                    self.parent_window._append_to_ai_chat_display("System Error", "AI Assistant is not ready.")
                 return
 
         if is_fsm_gen_specific:
@@ -391,8 +388,8 @@ class AIChatbotManager(QObject):
                                      Q_ARG(bool, is_fsm_gen_specific))
             
             logger.debug("MGR_PREP_SEND: Methods queued for worker.")
-            if self.parent_window and hasattr(self.parent_window, 'ai_chat_ui_manager') and self.parent_window.ai_chat_ui_manager:
-                self.parent_window.ai_chat_ui_manager.update_status_display("Status: Sending to AI...")
+            if hasattr(self.parent_window, '_update_ai_chat_status'): 
+                self.parent_window._update_ai_chat_status("Status: Sending to AI...")
         else:
             logger.error("MGR_PREP_SEND: Chatbot worker is None, cannot queue methods.")
             self.errorOccurred.emit("AI Assistant encountered an internal error (worker missing). Please try restarting AI features.")

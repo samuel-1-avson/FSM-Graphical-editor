@@ -1,5 +1,4 @@
 
-
 # bsm_designer_project/main.py
 
 import sys
