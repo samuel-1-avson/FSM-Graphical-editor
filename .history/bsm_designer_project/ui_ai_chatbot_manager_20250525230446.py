@@ -9,10 +9,7 @@ from PyQt5.QtCore import QObject, pyqtSlot, QTime
 from PyQt5.QtGui import QIcon, QColor
 
 from utils import get_standard_icon
-from config import (
-    COLOR_ACCENT_PRIMARY, COLOR_ACCENT_SECONDARY, COLOR_TEXT_PRIMARY,
-    COLOR_PY_SIM_STATE_ACTIVE
-)
+from config import COLOR_ACCENT_PRIMARY, COLOR_ACCENT_SECONDARY, COLOR_TEXT_PRIMARY
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,21 +30,27 @@ class AIChatUIManager(QObject):
     def _connect_actions_to_manager_slots(self):
         logger.debug("AIChatUI: Connecting actions to manager slots...")
         if hasattr(self.mw, 'ask_ai_to_generate_fsm_action'):
+            # print(f"DEBUG AIChatUI: Connecting ask_ai_to_generate_fsm_action to {self.on_ask_ai_to_generate_fsm}")
             self.mw.ask_ai_to_generate_fsm_action.triggered.connect(self.on_ask_ai_to_generate_fsm)
             logger.debug("AIChatUI: ask_ai_to_generate_fsm_action connected.")
         else:
+            # print("DEBUG AIChatUI: self.mw has NO ask_ai_to_generate_fsm_action")
             logger.warning("AIChatUI: MainWindow missing ask_ai_to_generate_fsm_action.")
         
         if hasattr(self.mw, 'openai_settings_action'):
+            # print(f"DEBUG AIChatUI: Connecting openai_settings_action to {self.on_openai_settings}")
             self.mw.openai_settings_action.triggered.connect(self.on_openai_settings)
             logger.debug("AIChatUI: openai_settings_action connected.")
         else:
+            # print("DEBUG AIChatUI: self.mw has NO openai_settings_action")
             logger.warning("AIChatUI: MainWindow missing openai_settings_action.")
         
         if hasattr(self.mw, 'clear_ai_chat_action'):
+            # print(f"DEBUG AIChatUI: Connecting clear_ai_chat_action to {self.on_clear_ai_chat_history}")
             self.mw.clear_ai_chat_action.triggered.connect(self.on_clear_ai_chat_history)
             logger.debug("AIChatUI: clear_ai_chat_action connected.")
         else:
+            # print("DEBUG AIChatUI: self.mw has NO clear_ai_chat_action")
             logger.warning("AIChatUI: MainWindow missing clear_ai_chat_action.")
 
     def _connect_ai_chatbot_signals(self):
@@ -95,14 +98,10 @@ class AIChatUIManager(QObject):
         is_error = "error" in status_text.lower() or "failed" in status_text.lower() or is_key_req
         is_ready = "ready" in status_text.lower() and not is_error and not is_thinking
 
-        accent_secondary_color_str = COLOR_ACCENT_SECONDARY.name() if isinstance(COLOR_ACCENT_SECONDARY, QColor) else COLOR_ACCENT_SECONDARY
-        
-        # Corrected line:
-        color_py_sim_active_str = COLOR_PY_SIM_STATE_ACTIVE.name() if isinstance(COLOR_PY_SIM_STATE_ACTIVE, QColor) else COLOR_PY_SIM_STATE_ACTIVE
-
+        accent_secondary_color = COLOR_ACCENT_SECONDARY
         if is_error: self.ai_chat_status_label.setStyleSheet("font-size: 8pt; color: red; font-weight: bold;")
-        elif is_thinking: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {accent_secondary_color_str}; font-style: italic;")
-        elif is_ready: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {color_py_sim_active_str};")
+        elif is_thinking: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {accent_secondary_color}; font-style: italic;")
+        elif is_ready: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {COLOR_PY_SIM_STATE_ACTIVE.name() if isinstance(COLOR_PY_SIM_STATE_ACTIVE, QColor) else COLOR_PY_SIM_STATE_ACTIVE};")
         else: self.ai_chat_status_label.setStyleSheet("font-size: 8pt; color: grey;")
 
         can_send_message = not is_thinking and not is_key_req and not ("offline" in status_text.lower())
@@ -120,17 +119,15 @@ class AIChatUIManager(QObject):
         if not self.ai_chat_display: return
         timestamp = QTime.currentTime().toString('hh:mm:ss')
         
-        sender_color_obj = COLOR_ACCENT_PRIMARY 
-        if sender == "You": sender_color_obj = COLOR_ACCENT_SECONDARY
-        elif sender == "System Error" or sender == "System": sender_color_obj = QColor("#D32F2F")
+        sender_color_str = COLOR_ACCENT_PRIMARY 
+        if sender == "You": sender_color_str = COLOR_ACCENT_SECONDARY
+        elif sender == "System Error" or sender == "System": sender_color_str = "#D32F2F"
 
-        sender_color_str = sender_color_obj.name() if isinstance(sender_color_obj, QColor) else sender_color_obj
-
+        if isinstance(sender_color_str, QColor): sender_color_str = sender_color_str.name()
 
         escaped_message = html.escape(message)
-        # Basic markdown-like formatting (bold, italic, code block, inline code)
         escaped_message = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', escaped_message)
-        escaped_message = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i>\1</i>', escaped_message) # Non-greedy italic
+        escaped_message = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i>\1</i>', escaped_message)
         escaped_message = re.sub(r'```(.*?)```', r'<pre><code style="background-color:#f0f0f0; padding:3px 5px; border-radius:3px; display:block; white-space:pre-wrap; border: 1px solid #ddd;">\1</code></pre>', escaped_message, flags=re.DOTALL | re.MULTILINE)
         escaped_message = re.sub(r'`(.*?)`', r'<code style="background-color:#f0f0f0; padding:1px 3px; border-radius:2px;">\1</code>', escaped_message)
         escaped_message = escaped_message.replace("\n", "<br>")
@@ -188,6 +185,7 @@ class AIChatUIManager(QObject):
 
     @pyqtSlot()
     def on_ask_ai_to_generate_fsm(self):
+        # print("DEBUG: AIChatUIManager.on_ask_ai_to_generate_fsm CALLED!") # Moved to logger
         logger.info("AIChatUI: on_ask_ai_to_generate_fsm CALLED!")
         description, ok = QInputDialog.getMultiLineText(self.mw, "Generate FSM", "Describe the FSM you want to create:", "Example: A traffic light with states Red, Yellow, Green...")
         if ok and description.strip():
@@ -202,6 +200,7 @@ class AIChatUIManager(QObject):
 
     @pyqtSlot()
     def on_openai_settings(self):
+        # print("DEBUG: AIChatUIManager.on_openai_settings CALLED!") # Moved to logger
         logger.info("AIChatUI: on_openai_settings CALLED!")
         if not self.mw.ai_chatbot_manager:
             logger.warning("AIChatUI: AI Chatbot Manager (mw.ai_chatbot_manager) not available for settings.")
@@ -231,8 +230,10 @@ class AIChatUIManager(QObject):
 
     @pyqtSlot()
     def on_clear_ai_chat_history(self):
+        # print("DEBUG: AIChatUIManager.on_clear_ai_chat_history CALLED!") # Moved to logger
         logger.info("AIChatUI: on_clear_ai_chat_history CALLED!")
         if self.mw.ai_chatbot_manager:
+            # Ask for confirmation before clearing
             reply = QMessageBox.question(self.mw, "Clear Chat History",
                                          "Are you sure you want to clear the entire AI chat history?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -243,10 +244,9 @@ class AIChatUIManager(QObject):
                     self.ai_chat_display.setPlaceholderText("AI chat history will appear here...")
                 logger.info("AIChatUI: Chat history cleared by user.")
                 self.update_status_display("Status: Chat history cleared.")
-                self._append_to_chat_display("System", "Chat history cleared.")
+                self._append_to_chat_display("System", "Chat history cleared.") # Also add to display
             else:
                 logger.info("AIChatUI: User cancelled clearing chat history.")
-                # Optionally restore previous status if needed, or assume it's still 'Ready' or similar
-                # self.update_status_display("Status: Ready.") 
+                self.update_status_display("Status: Ready.") # Or previous status
         else:
             self.handle_ai_error("AI Chatbot Manager not initialized.")

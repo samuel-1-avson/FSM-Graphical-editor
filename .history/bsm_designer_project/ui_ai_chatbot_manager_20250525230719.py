@@ -11,7 +11,7 @@ from PyQt5.QtGui import QIcon, QColor
 from utils import get_standard_icon
 from config import (
     COLOR_ACCENT_PRIMARY, COLOR_ACCENT_SECONDARY, COLOR_TEXT_PRIMARY,
-    COLOR_PY_SIM_STATE_ACTIVE
+    COLOR_PY_SIM_STATE_ACTIVE # <--- ADD THIS IMPORT
 )
 
 import logging
@@ -95,13 +95,13 @@ class AIChatUIManager(QObject):
         is_error = "error" in status_text.lower() or "failed" in status_text.lower() or is_key_req
         is_ready = "ready" in status_text.lower() and not is_error and not is_thinking
 
-        accent_secondary_color_str = COLOR_ACCENT_SECONDARY.name() if isinstance(COLOR_ACCENT_SECONDARY, QColor) else COLOR_ACCENT_SECONDARY
+        accent_secondary_color = COLOR_ACCENT_SECONDARY
         
         # Corrected line:
         color_py_sim_active_str = COLOR_PY_SIM_STATE_ACTIVE.name() if isinstance(COLOR_PY_SIM_STATE_ACTIVE, QColor) else COLOR_PY_SIM_STATE_ACTIVE
 
         if is_error: self.ai_chat_status_label.setStyleSheet("font-size: 8pt; color: red; font-weight: bold;")
-        elif is_thinking: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {accent_secondary_color_str}; font-style: italic;")
+        elif is_thinking: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {accent_secondary_color}; font-style: italic;")
         elif is_ready: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {color_py_sim_active_str};")
         else: self.ai_chat_status_label.setStyleSheet("font-size: 8pt; color: grey;")
 
@@ -120,17 +120,15 @@ class AIChatUIManager(QObject):
         if not self.ai_chat_display: return
         timestamp = QTime.currentTime().toString('hh:mm:ss')
         
-        sender_color_obj = COLOR_ACCENT_PRIMARY 
-        if sender == "You": sender_color_obj = COLOR_ACCENT_SECONDARY
-        elif sender == "System Error" or sender == "System": sender_color_obj = QColor("#D32F2F")
+        sender_color_str = COLOR_ACCENT_PRIMARY 
+        if sender == "You": sender_color_str = COLOR_ACCENT_SECONDARY
+        elif sender == "System Error" or sender == "System": sender_color_str = "#D32F2F"
 
-        sender_color_str = sender_color_obj.name() if isinstance(sender_color_obj, QColor) else sender_color_obj
-
+        if isinstance(sender_color_str, QColor): sender_color_str = sender_color_str.name()
 
         escaped_message = html.escape(message)
-        # Basic markdown-like formatting (bold, italic, code block, inline code)
         escaped_message = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', escaped_message)
-        escaped_message = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i>\1</i>', escaped_message) # Non-greedy italic
+        escaped_message = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i>\1</i>', escaped_message)
         escaped_message = re.sub(r'```(.*?)```', r'<pre><code style="background-color:#f0f0f0; padding:3px 5px; border-radius:3px; display:block; white-space:pre-wrap; border: 1px solid #ddd;">\1</code></pre>', escaped_message, flags=re.DOTALL | re.MULTILINE)
         escaped_message = re.sub(r'`(.*?)`', r'<code style="background-color:#f0f0f0; padding:1px 3px; border-radius:2px;">\1</code>', escaped_message)
         escaped_message = escaped_message.replace("\n", "<br>")

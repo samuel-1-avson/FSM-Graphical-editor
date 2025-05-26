@@ -38,25 +38,12 @@ class PySimulationUIManager(QObject):
         self._connect_actions_to_manager_slots()
 
     def _connect_actions_to_manager_slots(self):
-        logger.debug("PySimUI: Connecting actions to manager slots...")
         if hasattr(self.mw, 'start_py_sim_action'):
             self.mw.start_py_sim_action.triggered.connect(self.on_start_py_simulation)
-            logger.debug("PySimUI: start_py_sim_action connected.")
-        else:
-            logger.warning("PySimUI: MainWindow missing start_py_sim_action.")
-
         if hasattr(self.mw, 'stop_py_sim_action'):
             self.mw.stop_py_sim_action.triggered.connect(lambda: self.on_stop_py_simulation(silent=False))
-            logger.debug("PySimUI: stop_py_sim_action connected.")
-        else:
-            logger.warning("PySimUI: MainWindow missing stop_py_sim_action.")
-
         if hasattr(self.mw, 'reset_py_sim_action'):
             self.mw.reset_py_sim_action.triggered.connect(self.on_reset_py_simulation)
-            logger.debug("PySimUI: reset_py_sim_action connected.")
-        else:
-            logger.warning("PySimUI: MainWindow missing reset_py_sim_action.")
-
 
     def create_dock_widget_contents(self) -> QWidget:
         py_sim_widget = QWidget()
@@ -87,8 +74,11 @@ class PySimulationUIManager(QObject):
             self.py_sim_reset_btn.setIcon(get_standard_icon(QStyle.SP_MediaSkipBackward, "Py«"))
             self.py_sim_reset_btn.clicked.connect(self.on_reset_py_simulation)
 
+        # ***** CORRECTED CALL *****
         self.py_sim_step_btn = QPushButton("Step")
         self.py_sim_step_btn.setIcon(get_standard_icon(QStyle.SP_MediaSeekForward, "Step"))
+        # self.py_sim_step_btn.setIconSize(QSize(18,18)) # Optional: if specific size needed
+        # ***** END OF CORRECTION FOR THIS LINE *****
         self.py_sim_step_btn.clicked.connect(self.on_step_py_simulation)
 
         for btn in [self.py_sim_start_btn, self.py_sim_stop_btn, self.py_sim_reset_btn]:
@@ -102,9 +92,11 @@ class PySimulationUIManager(QObject):
         event_layout.addWidget(self.py_sim_event_combo, 1)
         self.py_sim_event_name_edit = QLineEdit(); self.py_sim_event_name_edit.setPlaceholderText("Custom event name")
         event_layout.addWidget(self.py_sim_event_name_edit, 1)
-        
+        # ***** CORRECTED CALL *****
         self.py_sim_trigger_event_btn = QPushButton("Trigger")
         self.py_sim_trigger_event_btn.setIcon(get_standard_icon(QStyle.SP_MediaPlay, "Trg"))
+        # self.py_sim_trigger_event_btn.setIconSize(QSize(18,18)) # Optional: if specific size needed
+        # ***** END OF CORRECTION *****
         self.py_sim_trigger_event_btn.clicked.connect(self.on_trigger_py_event)
         event_layout.addWidget(self.py_sim_trigger_event_btn)
         event_group.setLayout(event_layout); py_sim_layout.addWidget(event_group)
@@ -266,33 +258,25 @@ class PySimulationUIManager(QObject):
 
     @pyqtSlot()
     def on_start_py_simulation(self):
-        logger.info("PySimUI: on_start_py_simulation CALLED!")
         if self.mw.py_sim_active:
-            logger.warning("PySimUI: Simulation already active, returning.")
             QMessageBox.information(self.mw, "Simulation Active", "Python simulation is already running.")
             return
         
         if self.mw.scene.is_dirty():
-            logger.debug("PySimUI: Diagram is dirty, prompting user.")
+            # Use QMessageBox.question for Yes/No
             reply = QMessageBox.question(self.mw, "Unsaved Changes", 
                                          "The diagram has unsaved changes. Start simulation anyway?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if reply == QMessageBox.No:
-                logger.info("PySimUI: User chose not to start sim due to unsaved changes.")
                 return
                 
         diagram_data = self.mw.scene.get_diagram_data()
-        logger.debug(f"PySimUI: Diagram data for simulation - States: {len(diagram_data.get('states', []))}, Transitions: {len(diagram_data.get('transitions', []))}")
-
         if not diagram_data.get('states'):
-            logger.warning("PySimUI: No states found in diagram_data for simulation.")
             QMessageBox.warning(self.mw, "Empty Diagram", "Cannot start simulation: The diagram has no states.")
             return
 
         try:
-            logger.info("PySimUI: Attempting to instantiate FSMSimulator...")
             self.mw.py_fsm_engine = FSMSimulator(diagram_data['states'], diagram_data['transitions'], halt_on_action_error=True)
-            logger.info("PySimUI: FSMSimulator instantiated successfully.")
             self._set_simulation_active_state(True) 
             if self.py_sim_action_log_output: self.py_sim_action_log_output.clear(); self.py_sim_action_log_output.setHtml("<i>Simulation log will appear here...</i>")
             
@@ -300,71 +284,60 @@ class PySimulationUIManager(QObject):
             self.append_to_action_log(initial_log)
             self.update_dock_ui_contents()
         except FSMError as e:
-            logger.error(f"PySimUI: FSMError during FSMSimulator instantiation: {e}", exc_info=True)
             QMessageBox.critical(self.mw, "FSM Initialization Error", f"Failed to start Python FSM simulation:\n{e}")
-            self.append_to_action_log([f"ERROR Starting Sim: {e}"])
+            self.append_to_action_log([f"ERROR Starting Sim: {e}"]); logger.error("PySimUI: Start FSM Error: %s", e, exc_info=True)
             self.mw.py_fsm_engine = None; self._set_simulation_active_state(False)
-        except Exception as e: 
-            logger.error(f"PySimUI: Unexpected error during FSMSimulator instantiation: {e}", exc_info=True)
+        except Exception as e: # Catch any other unexpected errors
             QMessageBox.critical(self.mw, "Simulation Start Error", f"An unexpected error occurred while starting the simulation:\n{type(e).__name__}: {e}")
-            self.append_to_action_log([f"UNEXPECTED ERROR Starting Sim: {e}"])
+            self.append_to_action_log([f"UNEXPECTED ERROR Starting Sim: {e}"]); logger.error("PySimUI: Unexpected Start Error:", exc_info=True)
             self.mw.py_fsm_engine = None; self._set_simulation_active_state(False)
 
 
     @pyqtSlot(bool)
     def on_stop_py_simulation(self, silent=False):
-        logger.info(f"PySimUI: on_stop_py_simulation CALLED (silent={silent}). Current sim_active: {self.mw.py_sim_active}")
-        if not self.mw.py_sim_active: 
-            logger.info("PySimUI: Stop called but simulation not active.")
-            return 
+        if not self.mw.py_sim_active: return # Already stopped or never started
         
-        self._highlight_sim_active_state(None) 
-        self._highlight_sim_taken_transition(None) 
+        self._highlight_sim_active_state(None) # Clear any visual highlight on diagram
+        self._highlight_sim_taken_transition(None) # Clear transition highlight (if any)
 
-        self.mw.py_fsm_engine = None 
-        self._set_simulation_active_state(False) 
+        self.mw.py_fsm_engine = None # Release the engine instance
+        self._set_simulation_active_state(False) # This updates UI state internally
         
-        self.update_dock_ui_contents() 
+        self.update_dock_ui_contents() # Refresh the dock UI (e.g., clear variables, state label)
         if not silent:
             self.append_to_action_log(["Python FSM Simulation stopped."])
-            logger.info("PySimUI: Simulation stopped by user.")
 
 
     @pyqtSlot()
     def on_reset_py_simulation(self):
-        logger.info("PySimUI: on_reset_py_simulation CALLED!")
         if not self.mw.py_fsm_engine or not self.mw.py_sim_active:
-            logger.warning("PySimUI: Reset called but simulation not active or engine not available.")
             QMessageBox.warning(self.mw, "Simulation Not Active", "Python simulation is not running.")
             return
         try:
             self.mw.py_fsm_engine.reset()
-            if self.py_sim_action_log_output: 
+            if self.py_sim_action_log_output: # Add a visual separator in the log
                 self.py_sim_action_log_output.append("<hr><i style='color:grey;'>Simulation Reset</i><hr>")
             self.append_to_action_log(self.mw.py_fsm_engine.get_last_executed_actions_log())
-            self.update_dock_ui_contents(); self._highlight_sim_taken_transition(None) 
+            self.update_dock_ui_contents(); self._highlight_sim_taken_transition(None) # Update UI, clear transition highlights
         except FSMError as e:
-            logger.error(f"PySimUI: FSMError during reset: {e}", exc_info=True)
             QMessageBox.critical(self.mw, "FSM Reset Error", f"Failed to reset simulation:\n{e}")
-            self.append_to_action_log([f"ERROR DURING RESET: {e}"])
+            self.append_to_action_log([f"ERROR DURING RESET: {e}"]); logger.error("PySimUI: Reset FSM Error: %s", e, exc_info=True)
         except Exception as e:
-            logger.error(f"PySimUI: Unexpected error during reset: {e}", exc_info=True)
             QMessageBox.critical(self.mw, "Reset Error", f"An unexpected error occurred during reset:\n{type(e).__name__}: {e}")
-            self.append_to_action_log([f"UNEXPECTED ERROR DURING RESET: {e}"])
+            self.append_to_action_log([f"UNEXPECTED ERROR DURING RESET: {e}"]); logger.error("PySimUI: Unexpected Reset Error:", exc_info=True)
 
 
     @pyqtSlot()
     def on_step_py_simulation(self):
-        logger.debug("PySimUI: on_step_py_simulation CALLED!")
         if not self.mw.py_fsm_engine or not self.mw.py_sim_active:
             QMessageBox.warning(self.mw, "Simulation Not Active", "Python simulation is not running.")
             return
         try:
-            _, log_entries = self.mw.py_fsm_engine.step(event_name=None)
+            _, log_entries = self.mw.py_fsm_engine.step(event_name=None) # Internal step
             self.append_to_action_log(log_entries); self.update_dock_ui_contents(); self._highlight_sim_taken_transition(None)
             if self.mw.py_fsm_engine.simulation_halted_flag:
                 self.append_to_action_log(["[HALTED] Simulation halted due to an error. Please Reset."]); QMessageBox.warning(self.mw, "Simulation Halted", "The simulation has been halted due to an FSM action error. Please reset.")
-        except FSMError as e: 
+        except FSMError as e: # This might catch errors if step itself raises an FSMError not handled by simulation_halted_flag
             QMessageBox.warning(self.mw, "Simulation Step Error", str(e))
             self.append_to_action_log([f"ERROR DURING STEP: {e}"]); logger.error("PySimUI: Step FSMError: %s", e, exc_info=True)
             if self.mw.py_fsm_engine and self.mw.py_fsm_engine.simulation_halted_flag: self.append_to_action_log(["[HALTED] Simulation halted. Please Reset."])
@@ -374,7 +347,6 @@ class PySimulationUIManager(QObject):
 
     @pyqtSlot()
     def on_trigger_py_event(self):
-        logger.debug("PySimUI: on_trigger_py_event CALLED!")
         if not self.mw.py_fsm_engine or not self.mw.py_sim_active:
             QMessageBox.warning(self.mw, "Simulation Not Active", "Python simulation is not running.")
             return
@@ -383,18 +355,17 @@ class PySimulationUIManager(QObject):
         event_name_edit = self.py_sim_event_name_edit.text().strip() if self.py_sim_event_name_edit else ""
         
         event_to_trigger = event_name_edit if event_name_edit else (event_name_combo if event_name_combo != "None (Internal Step)" else None)
-        logger.debug(f"PySimUI: Event to trigger: '{event_to_trigger}' (from edit: '{event_name_edit}', from combo: '{event_name_combo}')")
-
 
         if not event_to_trigger:
+            # If no event specified, treat as an internal step
             self.on_step_py_simulation()
             return
 
         try:
             _, log_entries = self.mw.py_fsm_engine.step(event_name=event_to_trigger)
             self.append_to_action_log(log_entries); self.update_dock_ui_contents()
-            if self.py_sim_event_name_edit: self.py_sim_event_name_edit.clear()
-            self._highlight_sim_taken_transition(None)
+            if self.py_sim_event_name_edit: self.py_sim_event_name_edit.clear() # Clear custom event edit after use
+            self._highlight_sim_taken_transition(None) # Clear any previous transition highlight
             if self.mw.py_fsm_engine.simulation_halted_flag:
                 self.append_to_action_log(["[HALTED] Simulation halted due to an error. Please Reset."]); QMessageBox.warning(self.mw, "Simulation Halted", "The simulation has been halted due to an FSM action error. Please reset.")
         except FSMError as e:

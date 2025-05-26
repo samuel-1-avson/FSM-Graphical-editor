@@ -6,13 +6,12 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QStyle
 )
 from PyQt5.QtCore import QObject, pyqtSlot, QTime
-from PyQt5.QtGui import QIcon, QColor
+# ***** FIX: Import QColor *****
+from PyQt5.QtGui import QIcon, QColor 
+# ***** END OF FIX *****
 
-from utils import get_standard_icon
-from config import (
-    COLOR_ACCENT_PRIMARY, COLOR_ACCENT_SECONDARY, COLOR_TEXT_PRIMARY,
-    COLOR_PY_SIM_STATE_ACTIVE
-)
+from utils import get_standard_icon 
+from config import COLOR_ACCENT_PRIMARY, COLOR_ACCENT_SECONDARY, COLOR_TEXT_PRIMARY
 
 import logging
 logger = logging.getLogger(__name__)
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 class AIChatUIManager(QObject):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
-        self.mw = main_window
+        self.mw = main_window 
 
         self.ai_chat_display: QTextEdit = None
         self.ai_chat_input: QLineEdit = None
@@ -31,24 +30,14 @@ class AIChatUIManager(QObject):
         self._connect_ai_chatbot_signals()
 
     def _connect_actions_to_manager_slots(self):
-        logger.debug("AIChatUI: Connecting actions to manager slots...")
         if hasattr(self.mw, 'ask_ai_to_generate_fsm_action'):
             self.mw.ask_ai_to_generate_fsm_action.triggered.connect(self.on_ask_ai_to_generate_fsm)
-            logger.debug("AIChatUI: ask_ai_to_generate_fsm_action connected.")
-        else:
-            logger.warning("AIChatUI: MainWindow missing ask_ai_to_generate_fsm_action.")
         
         if hasattr(self.mw, 'openai_settings_action'):
             self.mw.openai_settings_action.triggered.connect(self.on_openai_settings)
-            logger.debug("AIChatUI: openai_settings_action connected.")
-        else:
-            logger.warning("AIChatUI: MainWindow missing openai_settings_action.")
         
         if hasattr(self.mw, 'clear_ai_chat_action'):
             self.mw.clear_ai_chat_action.triggered.connect(self.on_clear_ai_chat_history)
-            logger.debug("AIChatUI: clear_ai_chat_action connected.")
-        else:
-            logger.warning("AIChatUI: MainWindow missing clear_ai_chat_action.")
 
     def _connect_ai_chatbot_signals(self):
         if self.mw.ai_chatbot_manager:
@@ -90,55 +79,50 @@ class AIChatUIManager(QObject):
     def update_status_display(self, status_text: str):
         if not self.ai_chat_status_label: return
         self.ai_chat_status_label.setText(status_text)
-        is_thinking = any(s in status_text.lower() for s in ["thinking...", "sending...", "generating...", "processing..."])
-        is_key_req = any(s in status_text.lower() for s in ["api key required", "inactive", "api key error", "api key cleared"])
+        is_thinking = any(s in status_text.lower() for s in ["thinking...", "sending...", "generating..."])
+        is_key_req = any(s in status_text.lower() for s in ["api key required", "inactive", "api key error"])
         is_error = "error" in status_text.lower() or "failed" in status_text.lower() or is_key_req
-        is_ready = "ready" in status_text.lower() and not is_error and not is_thinking
 
-        accent_secondary_color_str = COLOR_ACCENT_SECONDARY.name() if isinstance(COLOR_ACCENT_SECONDARY, QColor) else COLOR_ACCENT_SECONDARY
-        
-        # Corrected line:
-        color_py_sim_active_str = COLOR_PY_SIM_STATE_ACTIVE.name() if isinstance(COLOR_PY_SIM_STATE_ACTIVE, QColor) else COLOR_PY_SIM_STATE_ACTIVE
+        accent_secondary_color = COLOR_ACCENT_SECONDARY 
+        # The safety check was for a hypothetical case where it might be QColor.
+        # Since it's defined as a string in config.py, this check is not strictly needed
+        # but having QColor imported makes the check valid if it were ever to change.
+        # if isinstance(COLOR_ACCENT_SECONDARY, QColor): 
+        #     accent_secondary_color = COLOR_ACCENT_SECONDARY.name()
 
-        if is_error: self.ai_chat_status_label.setStyleSheet("font-size: 8pt; color: red; font-weight: bold;")
-        elif is_thinking: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {accent_secondary_color_str}; font-style: italic;")
-        elif is_ready: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {color_py_sim_active_str};")
+        if is_error: self.ai_chat_status_label.setStyleSheet("font-size: 8pt; color: red;")
+        elif is_thinking: self.ai_chat_status_label.setStyleSheet(f"font-size: 8pt; color: {accent_secondary_color};") # Use the string directly
         else: self.ai_chat_status_label.setStyleSheet("font-size: 8pt; color: grey;")
 
-        can_send_message = not is_thinking and not is_key_req and not ("offline" in status_text.lower())
-        
-        if self.ai_chat_send_button: self.ai_chat_send_button.setEnabled(can_send_message)
+        can_send = not is_thinking and not is_key_req
+        if self.ai_chat_send_button: self.ai_chat_send_button.setEnabled(can_send)
         if self.ai_chat_input:
-            self.ai_chat_input.setEnabled(can_send_message)
-            if can_send_message and hasattr(self.mw, 'ai_chatbot_dock') and self.mw.ai_chatbot_dock and self.mw.ai_chatbot_dock.isVisible() and self.mw.isActiveWindow():
+            self.ai_chat_input.setEnabled(can_send)
+            if can_send and hasattr(self.mw, 'ai_chatbot_dock') and self.mw.ai_chatbot_dock and self.mw.ai_chatbot_dock.isVisible() and self.mw.isActiveWindow():
                 self.ai_chat_input.setFocus()
         
         if hasattr(self.mw, 'ask_ai_to_generate_fsm_action'):
-            self.mw.ask_ai_to_generate_fsm_action.setEnabled(can_send_message)
+            self.mw.ask_ai_to_generate_fsm_action.setEnabled(can_send)
 
     def _append_to_chat_display(self, sender: str, message: str):
         if not self.ai_chat_display: return
-        timestamp = QTime.currentTime().toString('hh:mm:ss')
+        timestamp = QTime.currentTime().toString('hh:mm')
         
-        sender_color_obj = COLOR_ACCENT_PRIMARY 
-        if sender == "You": sender_color_obj = COLOR_ACCENT_SECONDARY
-        elif sender == "System Error" or sender == "System": sender_color_obj = QColor("#D32F2F")
-
-        sender_color_str = sender_color_obj.name() if isinstance(sender_color_obj, QColor) else sender_color_obj
-
+        sender_color = COLOR_ACCENT_PRIMARY 
+        if sender == "You": sender_color = COLOR_ACCENT_SECONDARY
+        elif sender == "System Error" or sender == "System": sender_color = "#D32F2F"
 
         escaped_message = html.escape(message)
-        # Basic markdown-like formatting (bold, italic, code block, inline code)
         escaped_message = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', escaped_message)
-        escaped_message = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i>\1</i>', escaped_message) # Non-greedy italic
-        escaped_message = re.sub(r'```(.*?)```', r'<pre><code style="background-color:#f0f0f0; padding:3px 5px; border-radius:3px; display:block; white-space:pre-wrap; border: 1px solid #ddd;">\1</code></pre>', escaped_message, flags=re.DOTALL | re.MULTILINE)
+        escaped_message = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i>\1</i>', escaped_message)
+        escaped_message = re.sub(r'```(.*?)```', r'<pre><code style="background-color:#f0f0f0; padding:2px 4px; border-radius:3px; display:block; white-space:pre-wrap;">\1</code></pre>', escaped_message, flags=re.DOTALL)
         escaped_message = re.sub(r'`(.*?)`', r'<code style="background-color:#f0f0f0; padding:1px 3px; border-radius:2px;">\1</code>', escaped_message)
         escaped_message = escaped_message.replace("\n", "<br>")
         
         formatted_html = (f"<div style='margin-bottom: 8px;'>"
                           f"<span style='font-size:8pt; color:grey;'>[{timestamp}]</span> "
-                          f"<strong style='color:{sender_color_str};'>{html.escape(sender)}:</strong>"
-                          f"<div style='margin-top: 3px; padding-left: 5px; border-left: 2px solid {sender_color_str if sender_color_str != '#D32F2F' else '#FFCDD2'};'>{escaped_message}</div></div>")
+                          f"<strong style='color:{sender_color};'>{html.escape(sender)}:</strong>"
+                          f"<div style='margin-top: 3px; padding-left: 5px; border-left: 2px solid {sender_color if sender_color != '#D32F2F' else '#FFCDD2'};'>{escaped_message}</div></div>")
         self.ai_chat_display.append(formatted_html)
         self.ai_chat_display.ensureCursorVisible()
 
@@ -188,7 +172,6 @@ class AIChatUIManager(QObject):
 
     @pyqtSlot()
     def on_ask_ai_to_generate_fsm(self):
-        logger.info("AIChatUI: on_ask_ai_to_generate_fsm CALLED!")
         description, ok = QInputDialog.getMultiLineText(self.mw, "Generate FSM", "Describe the FSM you want to create:", "Example: A traffic light with states Red, Yellow, Green...")
         if ok and description.strip():
             logger.info("AIChatUI: Sending FSM desc: '%s...'", description[:50])
@@ -202,10 +185,9 @@ class AIChatUIManager(QObject):
 
     @pyqtSlot()
     def on_openai_settings(self):
-        logger.info("AIChatUI: on_openai_settings CALLED!")
         if not self.mw.ai_chatbot_manager:
-            logger.warning("AIChatUI: AI Chatbot Manager (mw.ai_chatbot_manager) not available for settings.")
-            QMessageBox.warning(self.mw, "AI Error", "AI Chatbot Manager is not initialized. Cannot open settings.")
+            logger.warning("AIChatUI: AI Chatbot Manager not available for settings.")
+            QMessageBox.warning(self.mw, "AI Error", "AI Chatbot Manager is not initialized.")
             return
 
         current_key = self.mw.ai_chatbot_manager.api_key or ""
@@ -218,35 +200,24 @@ class AIChatUIManager(QObject):
         )
         if ok:
             new_key_value = key.strip()
-            logger.info(f"AIChatUI: OpenAI API Key dialog returned. OK: {ok}, Key: {'SET' if new_key_value else 'EMPTY'}")
             self.mw.ai_chatbot_manager.set_api_key(new_key_value if new_key_value else None)
             if new_key_value:
+                logger.info("AIChatUI: OpenAI API Key set/updated.")
                 self.update_status_display("Status: API Key Set. Ready.")
-                if hasattr(self.mw, 'log_message'): self.mw.log_message("INFO","OpenAI API Key has been set/updated.")
             else:
+                logger.info("AIChatUI: OpenAI API Key cleared.")
                 self.update_status_display("Status: API Key Cleared. AI Inactive.")
-                if hasattr(self.mw, 'log_message'): self.mw.log_message("INFO","OpenAI API Key has been cleared.")
-        else:
-            logger.debug("AIChatUI: OpenAI API Key dialog cancelled by user.")
 
     @pyqtSlot()
     def on_clear_ai_chat_history(self):
-        logger.info("AIChatUI: on_clear_ai_chat_history CALLED!")
         if self.mw.ai_chatbot_manager:
-            reply = QMessageBox.question(self.mw, "Clear Chat History",
-                                         "Are you sure you want to clear the entire AI chat history?",
-                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if reply == QMessageBox.Yes:
-                self.mw.ai_chatbot_manager.clear_conversation_history()
-                if self.ai_chat_display: 
-                    self.ai_chat_display.clear()
-                    self.ai_chat_display.setPlaceholderText("AI chat history will appear here...")
-                logger.info("AIChatUI: Chat history cleared by user.")
-                self.update_status_display("Status: Chat history cleared.")
-                self._append_to_chat_display("System", "Chat history cleared.")
-            else:
-                logger.info("AIChatUI: User cancelled clearing chat history.")
-                # Optionally restore previous status if needed, or assume it's still 'Ready' or similar
-                # self.update_status_display("Status: Ready.") 
+            self.mw.ai_chatbot_manager.clear_conversation_history()
+            if self.ai_chat_display: self.ai_chat_display.clear(); self.ai_chat_display.setPlaceholderText("AI chat history will appear here...")
+            logger.info("AIChatUI: Chat history cleared.")
+            self.update_status_display("Status: Chat history cleared.") 
         else:
             self.handle_ai_error("AI Chatbot Manager not initialized.")
+            
+            
+            
+            
