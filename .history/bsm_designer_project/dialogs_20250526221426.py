@@ -1,3 +1,4 @@
+
 # bsm_designer_project/dialogs.py
 
 import sys
@@ -13,11 +14,10 @@ from PyQt5.QtCore import Qt, QDir, QSize, QPointF
 
 from config import (
     COLOR_ITEM_STATE_DEFAULT_BG, COLOR_ITEM_TRANSITION_DEFAULT, COLOR_TEXT_PRIMARY,
-    COLOR_TEXT_ON_ACCENT, MECHATRONICS_SNIPPETS, COLOR_ACCENT_PRIMARY,
-    DEFAULT_EXECUTION_ENV, EXECUTION_ENV_PYTHON_GENERIC, EXECUTION_ENV_ARDUINO_CPP,
-    EXECUTION_ENV_C_GENERIC, EXECUTION_ENV_RASPBERRYPI_PYTHON, EXECUTION_ENV_MICROPYTHON
+    COLOR_TEXT_ON_ACCENT, MECHATRONICS_COMMON_ACTIONS, MECHATRONICS_COMMON_EVENTS,
+    MECHATRONICS_COMMON_CONDITIONS, COLOR_ACCENT_PRIMARY
 )
-from code_editor import CodeEditor 
+from code_editor import CodeEditor # Added
 from utils import get_standard_icon
 from matlab_integration import MatlabConnection
 
@@ -134,7 +134,7 @@ class StatePropertiesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("State Properties")
         self.setWindowIcon(get_standard_icon(QStyle.SP_DialogApplyButton, "Props"))
-        self.setMinimumWidth(520) # Increased width for language combo
+        self.setMinimumWidth(480)
 
         self.parent_window_ref = parent
         self.scene_ref = scene_ref
@@ -162,23 +162,16 @@ class StatePropertiesDialog(QDialog):
         raw_sub_fsm_data = p.get('sub_fsm_data', {})
         self.current_sub_fsm_data = raw_sub_fsm_data if isinstance(raw_sub_fsm_data, dict) and all(k in raw_sub_fsm_data for k in ['states', 'transitions', 'comments']) else {'states': [], 'transitions': [], 'comments': []}
         
-        self.action_language_combo = QComboBox()
-        self.action_language_combo.addItems(list(MECHATRONICS_SNIPPETS.keys()))
-        self.action_language_combo.setCurrentText(p.get('action_language', DEFAULT_EXECUTION_ENV))
-        
-        self.entry_action_edit = CodeEditor(); self.entry_action_edit.setPlainText(p.get('entry_action', "")); self.entry_action_edit.setFixedHeight(100); self.entry_action_edit.setObjectName("ActionCodeEditor")
-        self.during_action_edit = CodeEditor(); self.during_action_edit.setPlainText(p.get('during_action', "")); self.during_action_edit.setFixedHeight(100); self.during_action_edit.setObjectName("ActionCodeEditor")
-        self.exit_action_edit = CodeEditor(); self.exit_action_edit.setPlainText(p.get('exit_action', "")); self.exit_action_edit.setFixedHeight(100); self.exit_action_edit.setObjectName("ActionCodeEditor")
-        
+        # Replace QTextEdit with CodeEditor for action fields
+        self.entry_action_edit = CodeEditor(); self.entry_action_edit.setPlainText(p.get('entry_action', "")); self.entry_action_edit.setFixedHeight(80); self.entry_action_edit.setObjectName("ActionCodeEditor")
+        self.during_action_edit = CodeEditor(); self.during_action_edit.setPlainText(p.get('during_action', "")); self.during_action_edit.setFixedHeight(80); self.during_action_edit.setObjectName("ActionCodeEditor")
+        self.exit_action_edit = CodeEditor(); self.exit_action_edit.setPlainText(p.get('exit_action', "")); self.exit_action_edit.setFixedHeight(80); self.exit_action_edit.setObjectName("ActionCodeEditor")
+
         self.description_edit = QTextEdit(p.get('description', "")); self.description_edit.setFixedHeight(75)
 
-        # Snippet buttons will be created dynamically based on language
-        self.entry_action_snippet_btn = self._create_insert_snippet_button(self.entry_action_edit, "actions", " Insert Action")
-        self.during_action_snippet_btn = self._create_insert_snippet_button(self.during_action_edit, "actions", " Insert Action")
-        self.exit_action_snippet_btn = self._create_insert_snippet_button(self.exit_action_edit, "actions", " Insert Action")
-        
-        self.action_language_combo.currentTextChanged.connect(self._on_action_language_changed)
-        self._on_action_language_changed(self.action_language_combo.currentText()) # Initialize editors and snippets
+        entry_action_btn = self._create_insert_snippet_button(self.entry_action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
+        during_action_btn = self._create_insert_snippet_button(self.during_action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
+        exit_action_btn = self._create_insert_snippet_button(self.exit_action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
 
         layout.addRow("Name:", self.name_edit)
         cb_layout = QHBoxLayout(); cb_layout.addWidget(self.is_initial_cb); cb_layout.addWidget(self.is_final_cb); cb_layout.addStretch()
@@ -186,12 +179,11 @@ class StatePropertiesDialog(QDialog):
         layout.addRow("Color:", self.color_button)
         cb_layout_super = QHBoxLayout(); cb_layout_super.addWidget(self.is_superstate_cb); cb_layout_super.addWidget(self.edit_sub_fsm_button); cb_layout_super.addStretch()
         layout.addRow("Hierarchy:", cb_layout_super)
-        layout.addRow("Action Language:", self.action_language_combo)
 
-        def add_field_with_note(form_layout, label_text, code_editor_widget, snippet_button):
+        def add_field_with_note(form_layout, label_text, text_edit_widget, snippet_button):
             h_editor_btn_layout = QHBoxLayout()
             h_editor_btn_layout.setSpacing(5)
-            h_editor_btn_layout.addWidget(code_editor_widget, 1) 
+            h_editor_btn_layout.addWidget(text_edit_widget, 1) 
             
             v_btn_container = QVBoxLayout()
             v_btn_container.setSpacing(0)
@@ -199,11 +191,11 @@ class StatePropertiesDialog(QDialog):
             v_btn_container.addStretch() 
             h_editor_btn_layout.addLayout(v_btn_container)
 
-            safety_note_label = QLabel("<small><i>Note: Code execution safety depends on the target environment.</i></small>")
+            safety_note_label = QLabel("<small><i>Note: Python code runs in a restricted environment.</i></small>")
             safety_note_label.setToolTip(
-                "For 'Python (Generic Simulation)', code is checked for common unsafe operations.\n"
-                "For other environments (Arduino, C, etc.), this editor provides text input; \n"
-                "safety and correctness are the responsibility of the external compiler/interpreter."
+                "Code is checked for common unsafe operations (e.g., 'import os').\n"
+                "However, always review your code for correctness and unintended side effects.\n"
+                "Allowed builtins include: print, len, abs, math functions, etc. No file I/O or OS calls."
             )
             safety_note_label.setStyleSheet("margin-top: 2px; color: grey;") 
 
@@ -214,9 +206,9 @@ class StatePropertiesDialog(QDialog):
             
             form_layout.addRow(label_text, field_v_layout)
 
-        add_field_with_note(layout, "Entry Action:", self.entry_action_edit, self.entry_action_snippet_btn)
-        add_field_with_note(layout, "During Action:", self.during_action_edit, self.during_action_snippet_btn)
-        add_field_with_note(layout, "Exit Action:", self.exit_action_edit, self.exit_action_snippet_btn)
+        add_field_with_note(layout, "Entry Action:", self.entry_action_edit, entry_action_btn)
+        add_field_with_note(layout, "During Action:", self.during_action_edit, during_action_btn)
+        add_field_with_note(layout, "Exit Action:", self.exit_action_edit, exit_action_btn)
         
         layout.addRow("Description:", self.description_edit)
 
@@ -225,39 +217,6 @@ class StatePropertiesDialog(QDialog):
         layout.addRow(btns)
 
         if is_new_state: self.name_edit.selectAll(); self.name_edit.setFocus()
-
-    def _on_action_language_changed(self, language_mode: str):
-        self.entry_action_edit.set_language(language_mode)
-        self.during_action_edit.setLanguage(language_mode)
-        self.exit_action_edit.setLanguage(language_mode)
-        
-        self._update_snippet_button_menu(self.entry_action_snippet_btn, self.entry_action_edit, language_mode, "actions")
-        self._update_snippet_button_menu(self.during_action_snippet_btn, self.during_action_edit, language_mode, "actions")
-        self._update_snippet_button_menu(self.exit_action_snippet_btn, self.exit_action_edit, language_mode, "actions")
-
-    def _create_insert_snippet_button(self, target_widget: CodeEditor, snippet_category: str, button_text="Insert...", icon_size_px=14):
-        button = QPushButton(button_text); button.setObjectName("SnippetButton")
-        button.setToolTip("Insert common snippets"); button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView, "Ins"))
-        button.setIconSize(QSize(icon_size_px + 2, icon_size_px + 2))
-        button.setMenu(QMenu(self)) # Menu will be populated by _update_snippet_button_menu
-        return button
-
-    def _update_snippet_button_menu(self, button: QPushButton, target_widget: CodeEditor, language_mode: str, snippet_category: str):
-        menu = button.menu()
-        menu.clear()
-        snippets_dict = MECHATRONICS_SNIPPETS.get(language_mode, {}).get(snippet_category, {})
-        
-        if not snippets_dict:
-            action = QAction(f"(No '{snippet_category}' snippets for {language_mode})", self)
-            action.setEnabled(False)
-            menu.addAction(action)
-        else:
-            for name, snippet in snippets_dict.items():
-                action = QAction(name, self)
-                action.triggered.connect(lambda checked=False, text_edit=target_widget, s=snippet: text_edit.insertPlainText(s + "\n"))
-                menu.addAction(action)
-        button.setEnabled(bool(snippets_dict))
-
 
     def _on_superstate_toggled(self, checked): 
         self.edit_sub_fsm_button.setEnabled(checked)
@@ -283,6 +242,18 @@ class StatePropertiesDialog(QDialog):
                                     "Sub-machine data has been updated in this dialog. "
                                     "Click OK to save these changes to the state.")
 
+    def _create_insert_snippet_button(self, target_widget, snippets_dict: dict, button_text="Insert...", icon_size_px=14): # target_widget can be CodeEditor
+        button = QPushButton(button_text); button.setObjectName("SnippetButton")
+        button.setToolTip("Insert common snippets"); button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView, "Ins"))
+        button.setIconSize(QSize(icon_size_px + 2, icon_size_px + 2))
+        menu = QMenu(self)
+        for name, snippet in snippets_dict.items():
+            action = QAction(name, self)
+            # QPlainTextEdit (base for CodeEditor) also has insertPlainText
+            action.triggered.connect(lambda checked=False, text_edit=target_widget, s=snippet: text_edit.insertPlainText(s + "\n"))
+            menu.addAction(action)
+        button.setMenu(menu); return button
+
     def _choose_color(self): 
         color = QColorDialog.getColor(self.current_color, self, "Select State Color")
         if color.isValid(): self.current_color = color; self._update_color_button_style()
@@ -299,7 +270,6 @@ class StatePropertiesDialog(QDialog):
         return {
             'name': self.name_edit.text().strip(), 'is_initial': self.is_initial_cb.isChecked(),
             'is_final': self.is_final_cb.isChecked(), 'color': self.current_color.name(),
-            'action_language': self.action_language_combo.currentText(),
             'entry_action': self.entry_action_edit.toPlainText().strip(),
             'during_action': self.during_action_edit.toPlainText().strip(),
             'exit_action': self.exit_action_edit.toPlainText().strip(),
@@ -313,20 +283,15 @@ class TransitionPropertiesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Transition Properties")
         self.setWindowIcon(get_standard_icon(QStyle.SP_FileDialogInfoView, "Props"))
-        self.setMinimumWidth(560) # Increased width
+        self.setMinimumWidth(520)
 
         layout = QFormLayout(self); layout.setSpacing(10); layout.setContentsMargins(12,12,12,12) 
         p = current_properties or {}
 
         self.event_edit = QLineEdit(p.get('event', ""))
         self.condition_edit = QLineEdit(p.get('condition', ""))
-        
-        self.action_language_combo = QComboBox()
-        self.action_language_combo.addItems(list(MECHATRONICS_SNIPPETS.keys()))
-        self.action_language_combo.setCurrentText(p.get('action_language', DEFAULT_EXECUTION_ENV))
-
-        self.action_edit = CodeEditor(); self.action_edit.setPlainText(p.get('action', "")); self.action_edit.setFixedHeight(100); self.action_edit.setObjectName("ActionCodeEditor")
-        
+        # Replace QTextEdit with CodeEditor for action field
+        self.action_edit = CodeEditor(); self.action_edit.setPlainText(p.get('action', "")); self.action_edit.setFixedHeight(80); self.action_edit.setObjectName("ActionCodeEditor")
         self.color_button = QPushButton("Choose Color..."); self.color_button.setObjectName("ColorButton")
         self.current_color = QColor(p.get('color', COLOR_ITEM_TRANSITION_DEFAULT)); self._update_color_button_style()
         self.color_button.clicked.connect(self._choose_color)
@@ -334,14 +299,11 @@ class TransitionPropertiesDialog(QDialog):
         self.offset_tang_spin = QSpinBox(); self.offset_tang_spin.setRange(-1000, 1000); self.offset_tang_spin.setValue(int(p.get('control_offset_y', 0)))
         self.description_edit = QTextEdit(p.get('description', "")); self.description_edit.setFixedHeight(75)
 
-        self.event_snippet_btn = self._create_insert_snippet_button_lineedit(self.event_edit, "events", " Insert Event")
-        self.condition_snippet_btn = self._create_insert_snippet_button_lineedit(self.condition_edit, "conditions", " Insert Condition")
-        self.action_snippet_btn = self._create_insert_snippet_button_codeeditor(self.action_edit, "actions", " Insert Action")
-
-        self.action_language_combo.currentTextChanged.connect(self._on_action_language_changed)
-        self._on_action_language_changed(self.action_language_combo.currentText()) # Initialize
-
-        def add_field_with_button_and_note(form_layout, label_text, edit_widget, snippet_button, is_code_field=True, is_line_edit=False):
+        event_btn = self._create_insert_snippet_button_lineedit(self.event_edit, MECHATRONICS_COMMON_EVENTS, " Insert Event")
+        condition_btn = self._create_insert_snippet_button_lineedit(self.condition_edit, MECHATRONICS_COMMON_CONDITIONS, " Insert Condition")
+        action_btn = self._create_insert_snippet_button_qtextedit(self.action_edit, MECHATRONICS_COMMON_ACTIONS, " Insert Action")
+        
+        def add_field_with_button_and_note(form_layout, label_text, edit_widget, snippet_button, is_code_field=True):
             h_editor_btn_layout = QHBoxLayout()
             h_editor_btn_layout.setSpacing(5)
             h_editor_btn_layout.addWidget(edit_widget, 1)
@@ -349,7 +311,7 @@ class TransitionPropertiesDialog(QDialog):
             v_btn_container = QVBoxLayout()
             v_btn_container.setSpacing(0)
             v_btn_container.addWidget(snippet_button)
-            if not is_line_edit : v_btn_container.addStretch() # Stretch only for multi-line editors
+            v_btn_container.addStretch()
             h_editor_btn_layout.addLayout(v_btn_container)
 
             field_v_layout = QVBoxLayout()
@@ -357,21 +319,20 @@ class TransitionPropertiesDialog(QDialog):
             field_v_layout.addLayout(h_editor_btn_layout)
 
             if is_code_field:
-                safety_note_label = QLabel("<small><i>Note: Code execution safety depends on the target environment.</i></small>")
+                safety_note_label = QLabel("<small><i>Note: Python code runs in a restricted environment.</i></small>")
                 safety_note_label.setToolTip(
-                    "For 'Python (Generic Simulation)', code is checked for common unsafe operations.\n"
-                    "For other environments (Arduino, C, etc.), this editor provides text input; \n"
-                    "safety and correctness are the responsibility of the external compiler/interpreter."
+                    "Code is checked for common unsafe operations (e.g., 'import os').\n"
+                    "Always review your code for correctness and unintended side effects.\n"
+                    "Allowed builtins include: print, len, abs, math functions, etc. No file I/O or OS calls."
                 )
                 safety_note_label.setStyleSheet("margin-top: 2px; color: grey;")
                 field_v_layout.addWidget(safety_note_label)
             
             form_layout.addRow(label_text, field_v_layout)
 
-        add_field_with_button_and_note(layout, "Event Trigger:", self.event_edit, self.event_snippet_btn, is_code_field=False, is_line_edit=True) 
-        add_field_with_button_and_note(layout, "Condition (Guard):", self.condition_edit, self.condition_snippet_btn, is_code_field=True, is_line_edit=True)
-        layout.addRow("Action Language:", self.action_language_combo)
-        add_field_with_button_and_note(layout, "Transition Action:", self.action_edit, self.action_snippet_btn, is_code_field=True)
+        add_field_with_button_and_note(layout, "Event Trigger:", self.event_edit, event_btn, is_code_field=False) 
+        add_field_with_button_and_note(layout, "Condition (Guard):", self.condition_edit, condition_btn, is_code_field=True)
+        add_field_with_button_and_note(layout, "Transition Action:", self.action_edit, action_btn, is_code_field=True)
 
         layout.addRow("Color:", self.color_button)
         curve_layout = QHBoxLayout()
@@ -384,46 +345,28 @@ class TransitionPropertiesDialog(QDialog):
         layout.addRow(buttons)
         if is_new_transition: self.event_edit.setFocus()
 
-    def _on_action_language_changed(self, language_mode: str):
-        self.action_edit.setLanguage(language_mode)
-        self._update_snippet_button_menu(self.event_snippet_btn, self.event_edit, language_mode, "events")
-        self._update_snippet_button_menu(self.condition_snippet_btn, self.condition_edit, language_mode, "conditions")
-        self._update_snippet_button_menu(self.action_snippet_btn, self.action_edit, language_mode, "actions")
-
-    def _create_insert_snippet_button_lineedit(self, target_line_edit: QLineEdit, snippet_category: str, button_text="Insert..."): 
+    def _create_insert_snippet_button_lineedit(self, target_line_edit: QLineEdit, snippets_dict: dict, button_text="Insert..."): 
         button = QPushButton(button_text); button.setObjectName("SnippetButton")
         button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView,"Ins")); button.setIconSize(QSize(14+2,14+2))
-        button.setToolTip("Insert common snippets."); button.setMenu(QMenu(self))
-        return button
+        button.setToolTip("Insert common snippets."); menu = QMenu(self)
+        for name, snippet in snippets_dict.items():
+            action = QAction(name, self)
+            def insert_logic(checked=False, line_edit=target_line_edit, s=snippet):
+                current_text = line_edit.text(); cursor_pos = line_edit.cursorPosition()
+                new_text = current_text[:cursor_pos] + s + current_text[cursor_pos:]
+                line_edit.setText(new_text); line_edit.setCursorPosition(cursor_pos + len(s))
+            action.triggered.connect(insert_logic); menu.addAction(action)
+        button.setMenu(menu); return button
 
-    def _create_insert_snippet_button_codeeditor(self, target_code_editor: CodeEditor, snippet_category: str, button_text="Insert..."): 
+    def _create_insert_snippet_button_qtextedit(self, target_text_edit, snippets_dict: dict, button_text="Insert..."):  # target_text_edit can be CodeEditor
         button = QPushButton(button_text); button.setObjectName("SnippetButton")
         button.setIcon(get_standard_icon(QStyle.SP_FileDialogContentsView,"Ins")); button.setIconSize(QSize(14+2,14+2))
-        button.setToolTip("Insert common snippets."); button.setMenu(QMenu(self))
-        return button
-
-    def _update_snippet_button_menu(self, button: QPushButton, target_widget, language_mode: str, snippet_category: str):
-        menu = button.menu()
-        menu.clear()
-        snippets_dict = MECHATRONICS_SNIPPETS.get(language_mode, {}).get(snippet_category, {})
-        
-        if not snippets_dict:
-            action = QAction(f"(No '{snippet_category}' snippets for {language_mode})", self)
-            action.setEnabled(False)
+        button.setToolTip("Insert common snippets."); menu = QMenu(self)
+        for name, snippet in snippets_dict.items():
+            action = QAction(name, self)
+            action.triggered.connect(lambda checked=False, text_edit=target_text_edit, s=snippet: text_edit.insertPlainText(s + "\n"))
             menu.addAction(action)
-        else:
-            for name, snippet in snippets_dict.items():
-                action = QAction(name, self)
-                if isinstance(target_widget, QLineEdit):
-                    def insert_logic(checked=False, line_edit=target_widget, s=snippet):
-                        current_text = line_edit.text(); cursor_pos = line_edit.cursorPosition()
-                        new_text = current_text[:cursor_pos] + s + current_text[cursor_pos:]
-                        line_edit.setText(new_text); line_edit.setCursorPosition(cursor_pos + len(s))
-                    action.triggered.connect(insert_logic)
-                elif isinstance(target_widget, CodeEditor): # Or QPlainTextEdit
-                    action.triggered.connect(lambda checked=False, text_edit=target_widget, s=snippet: text_edit.insertPlainText(s + "\n"))
-                menu.addAction(action)
-        button.setEnabled(bool(snippets_dict))
+        button.setMenu(menu); return button
 
     def _choose_color(self): 
         color = QColorDialog.getColor(self.current_color, self, "Select Transition Color")
@@ -436,13 +379,9 @@ class TransitionPropertiesDialog(QDialog):
 
     def get_properties(self): 
         return {
-            'event': self.event_edit.text().strip(), 
-            'condition': self.condition_edit.text().strip(),
-            'action_language': self.action_language_combo.currentText(),
-            'action': self.action_edit.toPlainText().strip(), 
-            'color': self.current_color.name(),
-            'control_offset_x': self.offset_perp_spin.value(), 
-            'control_offset_y': self.offset_tang_spin.value(),
+            'event': self.event_edit.text().strip(), 'condition': self.condition_edit.text().strip(),
+            'action': self.action_edit.toPlainText().strip(), 'color': self.current_color.name(),
+            'control_offset_x': self.offset_perp_spin.value(), 'control_offset_y': self.offset_tang_spin.value(),
             'description': self.description_edit.toPlainText().strip()
         }
 

@@ -804,7 +804,6 @@ class MainWindow(QMainWindow):
         self.current_ide_file_path: str | None = None
         self.ide_output_console: QTextEdit | None = None
         self.ide_run_script_action: QAction | None = None
-        self.ide_analyze_action: QAction | None = None
         self.ide_editor_is_dirty = False
         # --- CRITICAL ORDERING ---
         self.init_ui() 
@@ -974,9 +973,7 @@ class MainWindow(QMainWindow):
         self.ide_open_file_action = QAction(get_standard_icon(QStyle.SP_DialogOpenButton, "IDEOpn"), "Open Script...", self, triggered=self.on_ide_open_file)
         self.ide_save_file_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "IDESav"), "Save Script", self, triggered=self.on_ide_save_file)
         self.ide_save_as_file_action = QAction(get_standard_icon(_safe_get_style_enum("SP_DriveHDIcon", "SP_DialogSaveButton"), "IDESA"), "Save Script As...", self, triggered=self.on_ide_save_as_file)
-        self.ide_run_script_action = QAction(get_standard_icon(QStyle.SP_MediaPlay, "IDERunPy"), "Run Python Script", self, triggered=self.on_ide_run_python_script)
-        self.ide_analyze_action = QAction(get_standard_icon(QStyle.SP_ComputerIcon, "IDEAI"), "Analyze with AI", self, triggered=self.on_ide_analyze_with_ai)
-
+        self.ide_run_script_action = QAction(get_standard_icon(QStyle.SP_MediaPlay, "IDERun"), "Run Python Script", self, triggered=self.on_ide_run_python_script)
 
         logger.debug(f"MW: AI actions created. Settings: {self.openai_settings_action}, Clear: {self.clear_ai_chat_action}, Generate: {self.ask_ai_to_generate_fsm_action}")
 
@@ -1030,10 +1027,7 @@ class MainWindow(QMainWindow):
         ide_menu.addAction(self.ide_open_file_action)
         ide_menu.addAction(self.ide_save_file_action)
         ide_menu.addAction(self.ide_save_as_file_action)
-        ide_menu.addSeparator()
         ide_menu.addAction(self.ide_run_script_action)
-        ide_menu.addAction(self.ide_analyze_action)
-
 
         ai_menu = menu_bar.addMenu("&AI Assistant")
         ai_menu.addAction(self.ask_ai_to_generate_fsm_action) 
@@ -1206,9 +1200,6 @@ class MainWindow(QMainWindow):
         self.ide_language_combo.currentTextChanged.connect(self._on_ide_language_changed)
         ide_toolbar.addWidget(QLabel(" Language: "))
         ide_toolbar.addWidget(self.ide_language_combo)
-        ide_toolbar.addSeparator()
-        ide_toolbar.addAction(self.ide_analyze_action)
-
 
         ide_main_layout.addWidget(ide_toolbar)
 
@@ -2069,47 +2060,6 @@ class MainWindow(QMainWindow):
             self._update_internet_status_display(current_status, status_detail)
 
 
-
-
-
-
-    def _update_ai_features_enabled_state(self, is_online_and_key_present: bool):
-        """Enables or disables AI-related UI elements."""
-        if hasattr(self, 'ask_ai_to_generate_fsm_action'):
-            self.ask_ai_to_generate_fsm_action.setEnabled(is_online_and_key_present)
-        if hasattr(self, 'clear_ai_chat_action'): # Assuming clearing history might interact with the worker
-            self.clear_ai_chat_action.setEnabled(is_online_and_key_present)
-        # openai_settings_action should probably always be enabled to allow key entry.
-        
-        if hasattr(self, 'ai_chat_ui_manager') and self.ai_chat_ui_manager:
-            if self.ai_chat_ui_manager.ai_chat_send_button:
-                self.ai_chat_ui_manager.ai_chat_send_button.setEnabled(is_online_and_key_present)
-            if self.ai_chat_ui_manager.ai_chat_input:
-                self.ai_chat_ui_manager.ai_chat_input.setEnabled(is_online_and_key_present)
-                if not is_online_and_key_present:
-                    if not self.ai_chatbot_manager.api_key:
-                        self.ai_chat_ui_manager.ai_chat_input.setPlaceholderText("AI disabled: API Key required.")
-                    elif not self._internet_connected:
-                        self.ai_chat_ui_manager.ai_chat_input.setPlaceholderText("AI disabled: Internet connection required.")
-                else:
-                    self.ai_chat_ui_manager.ai_chat_input.setPlaceholderText("Type your message to the AI...")
-        
-        if hasattr(self, 'ide_analyze_action') and hasattr(self, 'ide_language_combo'):
-            current_ide_lang = self.ide_language_combo.currentText()
-            can_analyze_ide = (current_ide_lang == "Python" or current_ide_lang.startswith("C/C++")) and is_online_and_key_present
-            self.ide_analyze_action.setEnabled(can_analyze_ide)
-            tooltip = "Analyze the current code with AI"
-            if not is_online_and_key_present:
-                tooltip += " (Requires Internet & API Key)"
-            elif not (current_ide_lang == "Python" or current_ide_lang.startswith("C/C++")):
-                 tooltip += " (Best for Python or C/C++)"
-            self.ide_analyze_action.setToolTip(tooltip)
-
-
-
-
-
-
     def _update_internet_status_display(self, is_connected: bool, message_detail: str): 
         full_status_text = f"Internet: {message_detail}"
         if hasattr(self, 'internet_status_label'):
@@ -2120,54 +2070,8 @@ class MainWindow(QMainWindow):
             self.internet_status_label.setStyleSheet(f"padding:0 5px;color:{text_color};")
         
         logging.debug("Internet Status Update: %s", message_detail)
-        
-        key_present = self.ai_chatbot_manager is not None and bool(self.ai_chatbot_manager.api_key)
-        ai_ready = is_connected and key_present
-        
         if hasattr(self.ai_chatbot_manager, 'set_online_status'):
-            self.ai_chatbot_manager.set_online_status(is_connected) # Worker also needs to know
-        
-        self._update_ai_features_enabled_state(ai_ready)
-        
-        # Update AI Chatbot Dock status label specifically
-        if hasattr(self, 'ai_chat_ui_manager') and self.ai_chat_ui_manager:
-            if not key_present:
-                self.ai_chat_ui_manager.update_status_display("Status: API Key required. Configure in Settings.")
-            elif not is_connected:
-                self.ai_chat_ui_manager.update_status_display("Status: Offline. AI features unavailable.")
-            # else: The AIChatbotManager will emit its own "Ready" or "Thinking" status
-
-    # In __init__ after AI manager setup, and after setting/clearing API key:
-    # self._update_ai_features_enabled_state(self._internet_connected and bool(self.ai_chatbot_manager.api_key))
-
-    # When API key is set/cleared in on_openai_settings (in AIChatUIManager, it calls manager.set_api_key):
-    # The manager's set_api_key already emits a statusUpdate. That signal is connected to 
-    # AIChatUIManager.update_status_display. We need to ensure that ui manager's update_status_display
-    # also considers calling _update_ai_features_enabled_state or that the main window's internet status update
-    # is re-triggered.
-    # A simpler way is that AIChatbotManager, after setting API key and initializing client,
-    # emits a specific signal or its usual statusUpdate which implicitly causes a refresh.
-    # The set_online_status in AIChatbotManager already updates its status.
-
-    # Let's ensure that when the API key changes, the global AI feature enable state is re-evaluated.
-    # In AIChatbotManager's set_api_key:
-    # After self._setup_worker() or emitting "Status: API Key cleared...":
-    # self.parent_window._update_ai_features_enabled_state_external() could be a new slot in MainWindow.
-
-    # Or, more cleanly, MainWindow connects to AIChatbotManager.statusUpdate
-    # and *also* calls _update_ai_features_enabled_state there.
-
-    # In MainWindow.__init__():
-    # self.ai_chatbot_manager.statusUpdate.connect(self._handle_ai_status_for_enable_update)
-
-    # @pyqtSlot(str)
-    # def _handle_ai_status_for_enable_update(self, status_text):
-    #     # This will be called by AI manager's own status updates
-    #     # We also need to check internet here to decide overall AI readiness
-    #     key_present = self.ai_chatbot_manager is not None and bool(self.ai_chatbot_manager.api_key)
-    #     ai_ready = self._internet_connected and key_present
-    #     self._update_ai_features_enabled_state(ai_ready)
-    #     # The AI Chat UI Manager will handle displaying the specific status_text from AI
+            self.ai_chatbot_manager.set_online_status(is_connected)
 
     def _update_py_sim_status_display(self): 
         if hasattr(self, 'py_sim_status_label'):
@@ -2295,22 +2199,12 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def _on_ide_language_changed(self, language: str):
-        if self.ide_code_editor:
-            self.ide_code_editor.set_language(language)
-
         if self.ide_run_script_action:
             is_python = (language == "Python")
             self.ide_run_script_action.setEnabled(is_python)
             self.ide_run_script_action.setToolTip("Run the current Python script in the editor" if is_python else "Run is currently only supported for Python scripts")
-        if self.ide_analyze_action:
-            # Enable AI analysis for Python and C/C++ if API key is set
-            can_analyze = (language == "Python" or language.startswith("C/C++")) and \
-                          self.ai_chatbot_manager is not None and \
-                          self.ai_chatbot_manager.api_key is not None
-            self.ide_analyze_action.setEnabled(can_analyze)
-            self.ide_analyze_action.setToolTip("Analyze the current code with AI" if can_analyze else "Configure AI API Key and select Python or C/C++ to enable analysis")
-        
-        logger.info(f"IDE: Language changed to {language}.")
+        # In the future, this could change the syntax highlighter or other language-specific settings
+        logger.info(f"IDE: Language changed to {language}. Run enabled: {is_python if self.ide_run_script_action else 'N/A'}")
 
 
     @pyqtSlot()
@@ -2357,34 +2251,6 @@ class MainWindow(QMainWindow):
             stdout_capture.close()
             stderr_capture.close()
             self.ide_output_console.ensureCursorVisible()
-
-    @pyqtSlot()
-    def on_ide_analyze_with_ai(self):
-        if not self.ide_code_editor or not self.ide_output_console:
-            logger.error("IDE: Code editor or output console not available for AI analysis.")
-            return
-        if not self.ai_chatbot_manager or not self.ai_chatbot_manager.api_key:
-            QMessageBox.warning(self, "AI Assistant Not Ready", "Please configure your OpenAI API key in AI Assistant Settings to use this feature.")
-            return
-
-        code_to_analyze = self.ide_code_editor.toPlainText()
-        if not code_to_analyze.strip():
-            self.ide_output_console.setHtml("<i>No code to analyze.</i>")
-            return
-
-        selected_language = self.ide_language_combo.currentText()
-        language_context = ""
-        if "Arduino" in selected_language: language_context = "for Arduino"
-        elif "C/C++" in selected_language: language_context = "for generic C/C++"
-        elif "Python" in selected_language: language_context = "for Python"
-
-        prompt = f"Please review the following {selected_language} code snippet {language_context}. Check for syntax errors, common programming mistakes, potential bugs, or suggest improvements. Provide feedback and, if there are issues, offer a corrected version or explain the problem:\n\n```\n{code_to_analyze}\n```"
-        
-        self.ide_output_console.append(f"<i style='color:grey;'>Sending code to AI for analysis ({selected_language})... (Response will appear in main AI Chat window)</i><hr>")
-        # For simplicity, we'll just add this request to the main AI chat window
-        self.ai_chat_ui_manager._append_to_chat_display("IDE", f"Requesting AI analysis for the current script ({selected_language}).")
-        self.ai_chatbot_manager.send_message(prompt)
-
 
     def log_message(self, level_str: str, message: str): 
         level = getattr(logging, level_str.upper(), logging.INFO)

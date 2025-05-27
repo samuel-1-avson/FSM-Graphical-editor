@@ -5,8 +5,6 @@ import sys
 import os
 import tempfile
 import subprocess
-import io # For capturing stdout/stderr
-import contextlib # For redirecting stdout/stderr
 import json
 import html
 import math
@@ -27,7 +25,6 @@ except ImportError:
 from graphics_scene import DiagramScene, ZoomableView
 from graphics_items import GraphicsStateItem, GraphicsTransitionItem, GraphicsCommentItem
 from undo_commands import AddItemCommand, MoveItemsCommand, RemoveItemsCommand, EditItemPropertiesCommand
-from code_editor import CodeEditor # Import CodeEditor
 from fsm_simulator import FSMSimulator, FSMError
 from ai_chatbot import AIChatbotManager
 from dialogs import (MatlabSettingsDialog)
@@ -799,13 +796,6 @@ class MainWindow(QMainWindow):
         self.py_fsm_engine: FSMSimulator | None = None
         self.py_sim_active = False
 
-        # --- IDE Dock Attributes ---
-        self.ide_code_editor: CodeEditor | None = None
-        self.current_ide_file_path: str | None = None
-        self.ide_output_console: QTextEdit | None = None
-        self.ide_run_script_action: QAction | None = None
-        self.ide_analyze_action: QAction | None = None
-        self.ide_editor_is_dirty = False
         # --- CRITICAL ORDERING ---
         self.init_ui() 
 
@@ -894,8 +884,6 @@ class MainWindow(QMainWindow):
         # Tabify after content is set
         self.tabifyDockWidget(self.properties_dock, self.ai_chatbot_dock)
         self.tabifyDockWidget(self.ai_chatbot_dock, self.py_sim_dock)
-        if hasattr(self, 'ide_dock'): # If IDE dock exists
-            self.tabifyDockWidget(self.py_sim_dock, self.ide_dock)
 
 
     def _create_central_widget(self):
@@ -969,15 +957,6 @@ class MainWindow(QMainWindow):
         self.quick_start_action = QAction(get_standard_icon(QStyle.SP_MessageBoxQuestion, "QS"), "&Quick Start Guide", self, triggered=self.on_show_quick_start)
         self.about_action = QAction(get_standard_icon(QStyle.SP_DialogHelpButton, "?"), "&About", self, triggered=self.on_about)
         
-        # --- IDE Actions ---
-        self.ide_new_file_action = QAction(get_standard_icon(QStyle.SP_FileIcon, "IDENew"), "New Script", self, triggered=self.on_ide_new_file)
-        self.ide_open_file_action = QAction(get_standard_icon(QStyle.SP_DialogOpenButton, "IDEOpn"), "Open Script...", self, triggered=self.on_ide_open_file)
-        self.ide_save_file_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "IDESav"), "Save Script", self, triggered=self.on_ide_save_file)
-        self.ide_save_as_file_action = QAction(get_standard_icon(_safe_get_style_enum("SP_DriveHDIcon", "SP_DialogSaveButton"), "IDESA"), "Save Script As...", self, triggered=self.on_ide_save_as_file)
-        self.ide_run_script_action = QAction(get_standard_icon(QStyle.SP_MediaPlay, "IDERunPy"), "Run Python Script", self, triggered=self.on_ide_run_python_script)
-        self.ide_analyze_action = QAction(get_standard_icon(QStyle.SP_ComputerIcon, "IDEAI"), "Analyze with AI", self, triggered=self.on_ide_analyze_with_ai)
-
-
         logger.debug(f"MW: AI actions created. Settings: {self.openai_settings_action}, Clear: {self.clear_ai_chat_action}, Generate: {self.ask_ai_to_generate_fsm_action}")
 
 
@@ -1023,17 +1002,6 @@ class MainWindow(QMainWindow):
         matlab_sim_menu.addAction(self.matlab_settings_action)
 
         self.view_menu = menu_bar.addMenu("&View") 
-
-        tools_menu = menu_bar.addMenu("&Tools") # New Tools menu
-        ide_menu = tools_menu.addMenu(get_standard_icon(QStyle.SP_FileDialogDetailedView, "IDE"), "Standalone IDE")
-        ide_menu.addAction(self.ide_new_file_action)
-        ide_menu.addAction(self.ide_open_file_action)
-        ide_menu.addAction(self.ide_save_file_action)
-        ide_menu.addAction(self.ide_save_as_file_action)
-        ide_menu.addSeparator()
-        ide_menu.addAction(self.ide_run_script_action)
-        ide_menu.addAction(self.ide_analyze_action)
-
 
         ai_menu = menu_bar.addMenu("&AI Assistant")
         ai_menu.addAction(self.ask_ai_to_generate_fsm_action) 
@@ -1174,63 +1142,8 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.ai_chatbot_dock)
         if hasattr(self, 'view_menu'): self.view_menu.addAction(self.ai_chatbot_dock.toggleViewAction())
 
-        # --- Standalone IDE Dock ---
-        self._setup_ide_dock_widget()
-
         # Tabify docks: This should ideally happen AFTER their content widgets are set.
         # Moved to _populate_dynamic_docks.
-
-    def _setup_ide_dock_widget(self):
-        self.ide_dock = QDockWidget("Standalone Code IDE", self)
-        self.ide_dock.setObjectName("IDEDock")
-        self.ide_dock.setAllowedAreas(Qt.AllDockWidgetAreas) # Allow flexible placement
-
-        ide_main_widget = QWidget()
-        ide_main_layout = QVBoxLayout(ide_main_widget)
-        ide_main_layout.setContentsMargins(0,0,0,0) # Toolbar will have its own margins
-        ide_main_layout.setSpacing(0)
-
-        # Toolbar for IDE
-        ide_toolbar = QToolBar("IDE Tools")
-        ide_toolbar.setIconSize(QSize(18,18))
-        ide_toolbar.addAction(self.ide_new_file_action)
-        ide_toolbar.addAction(self.ide_open_file_action)
-        ide_toolbar.addAction(self.ide_save_file_action)
-        ide_toolbar.addAction(self.ide_save_as_file_action)
-        ide_toolbar.addSeparator()
-        ide_toolbar.addAction(self.ide_run_script_action) # Add Run button
-        ide_toolbar.addSeparator()
-        self.ide_language_combo = QComboBox()
-        self.ide_language_combo.addItems(["Python", "C/C++ (Arduino)", "C/C++ (Generic)", "Text"])
-        self.ide_language_combo.setToolTip("Select language (syntax highlighting for Python only currently)")
-        self.ide_language_combo.currentTextChanged.connect(self._on_ide_language_changed)
-        ide_toolbar.addWidget(QLabel(" Language: "))
-        ide_toolbar.addWidget(self.ide_language_combo)
-        ide_toolbar.addSeparator()
-        ide_toolbar.addAction(self.ide_analyze_action)
-
-
-        ide_main_layout.addWidget(ide_toolbar)
-
-        self.ide_code_editor = CodeEditor()
-        self.ide_code_editor.setObjectName("StandaloneCodeEditor") # Different from ActionCodeEditor for potential styling
-        self.ide_code_editor.setPlaceholderText("Create a new file or open an existing script...")
-        self.ide_code_editor.textChanged.connect(self._on_ide_text_changed)
-        ide_main_layout.addWidget(self.ide_code_editor, 1)
-
-        # Output console for IDE
-        self.ide_output_console = QTextEdit()
-        self.ide_output_console.setObjectName("IDEOutputConsole")
-        self.ide_output_console.setReadOnly(True)
-        self.ide_output_console.setPlaceholderText("Script output will appear here...")
-        self.ide_output_console.setFixedHeight(150) # Give it a reasonable default height
-        ide_main_layout.addWidget(self.ide_output_console)
-
-        self.ide_dock.setWidget(ide_main_widget)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.ide_dock) # Add to right by default
-        if hasattr(self, 'view_menu'): self.view_menu.addAction(self.ide_dock.toggleViewAction())
-        
-        self._on_ide_language_changed(self.ide_language_combo.currentText()) # Set initial state of run button
 
     def _create_status_bar(self): 
         self.status_bar = QStatusBar(self)
@@ -1254,7 +1167,6 @@ class MainWindow(QMainWindow):
 
         self.progress_bar = QProgressBar(self); self.progress_bar.setRange(0,0); self.progress_bar.setVisible(False); self.progress_bar.setMaximumWidth(150); self.progress_bar.setTextVisible(False)
         self.status_bar.addPermanentWidget(self.progress_bar)
-        self._update_ide_save_actions_enable_state() # Init IDE save actions
 
     def _init_resource_monitor(self): 
         self.resource_monitor_thread = QThread(self) 
@@ -1541,24 +1453,14 @@ class MainWindow(QMainWindow):
 
     def _update_window_title(self): 
         file_name = os.path.basename(self.current_file_path) if self.current_file_path else "Untitled"
-        ide_file_name = os.path.basename(self.current_ide_file_path) if self.current_ide_file_path else None
-        
         sim_status_suffix = " [PySim Running]" if self.py_sim_active else ""
-        ide_suffix = f" | IDE: {ide_file_name}{'*' if self.ide_editor_is_dirty else ''}" if ide_file_name else ""
-        
-        title = f"{APP_NAME} - {file_name}{sim_status_suffix}{ide_suffix}"
+        title = f"{APP_NAME} - {file_name}{sim_status_suffix}"
         self.setWindowTitle(title + "[*]") 
         if hasattr(self, 'status_label'): 
             self.status_label.setText(f"File: {file_name}{' *' if self.isWindowModified() else ''} | PySim: {'Active' if self.py_sim_active else 'Idle'}")
 
     def _update_save_actions_enable_state(self): 
         self.save_action.setEnabled(self.isWindowModified())
-
-    def _update_ide_save_actions_enable_state(self):
-        if hasattr(self, 'ide_save_file_action'):
-            self.ide_save_file_action.setEnabled(self.ide_editor_is_dirty)
-        if hasattr(self, 'ide_save_as_file_action'): # Save As is always enabled if editor has content
-             self.ide_save_as_file_action.setEnabled(self.ide_code_editor is not None and bool(self.ide_code_editor.toPlainText()))
 
     def _update_undo_redo_actions_enable_state(self): 
         self.undo_action.setEnabled(self.undo_stack.canUndo())
@@ -1608,7 +1510,7 @@ class MainWindow(QMainWindow):
             child.setEnabled(enabled)
         if self.centralWidget(): self.centralWidget().setEnabled(enabled) 
         
-        for dock_name in ["ToolsDock", "PropertiesDock", "LogDock", "PySimDock", "AIChatbotDock", "IDEDock"]:
+        for dock_name in ["ToolsDock", "PropertiesDock", "LogDock", "PySimDock", "AIChatbotDock"]:
             dock = self.findChild(QDockWidget, dock_name)
             if dock: dock.setEnabled(enabled) 
         
@@ -2000,14 +1902,6 @@ class MainWindow(QMainWindow):
                           """)
 
     def closeEvent(self, event: QCloseEvent): 
-        if not self._prompt_ide_save_if_dirty(): # Check IDE first
-            event.ignore()
-            return
-        
-        if not self._prompt_save_if_dirty(): # Then check main diagram
-            event.ignore()
-            return
-
         if self.py_sim_ui_manager: 
             self.py_sim_ui_manager.on_stop_py_simulation(silent=True) 
 
@@ -2040,11 +1934,16 @@ class MainWindow(QMainWindow):
             self.resource_monitor_worker = None 
             self.resource_monitor_thread = None
         
-        # Both prompts passed or were not needed
-        if self.matlab_connection and hasattr(self.matlab_connection, '_active_threads') and self.matlab_connection._active_threads:
-            logging.info("Closing application. %d MATLAB processes initiated by this session may still be running in the background if not completed.", len(self.matlab_connection._active_threads))
-        event.accept()
-
+        if self._prompt_save_if_dirty():
+            if self.matlab_connection and hasattr(self.matlab_connection, '_active_threads') and self.matlab_connection._active_threads:
+                logging.info("Closing application. %d MATLAB processes initiated by this session may still be running in the background if not completed.", len(self.matlab_connection._active_threads))
+            event.accept()
+        else:
+            event.ignore()
+            if self.internet_check_timer and not self.internet_check_timer.isActive(): 
+                self.internet_check_timer.start()
+            if self.resource_monitor_thread is None and self.resource_monitor_worker is None: 
+                self._init_resource_monitor() 
 
     def _init_internet_status_check(self): 
         self.internet_check_timer.timeout.connect(self._run_internet_check_job)
@@ -2069,47 +1968,6 @@ class MainWindow(QMainWindow):
             self._update_internet_status_display(current_status, status_detail)
 
 
-
-
-
-
-    def _update_ai_features_enabled_state(self, is_online_and_key_present: bool):
-        """Enables or disables AI-related UI elements."""
-        if hasattr(self, 'ask_ai_to_generate_fsm_action'):
-            self.ask_ai_to_generate_fsm_action.setEnabled(is_online_and_key_present)
-        if hasattr(self, 'clear_ai_chat_action'): # Assuming clearing history might interact with the worker
-            self.clear_ai_chat_action.setEnabled(is_online_and_key_present)
-        # openai_settings_action should probably always be enabled to allow key entry.
-        
-        if hasattr(self, 'ai_chat_ui_manager') and self.ai_chat_ui_manager:
-            if self.ai_chat_ui_manager.ai_chat_send_button:
-                self.ai_chat_ui_manager.ai_chat_send_button.setEnabled(is_online_and_key_present)
-            if self.ai_chat_ui_manager.ai_chat_input:
-                self.ai_chat_ui_manager.ai_chat_input.setEnabled(is_online_and_key_present)
-                if not is_online_and_key_present:
-                    if not self.ai_chatbot_manager.api_key:
-                        self.ai_chat_ui_manager.ai_chat_input.setPlaceholderText("AI disabled: API Key required.")
-                    elif not self._internet_connected:
-                        self.ai_chat_ui_manager.ai_chat_input.setPlaceholderText("AI disabled: Internet connection required.")
-                else:
-                    self.ai_chat_ui_manager.ai_chat_input.setPlaceholderText("Type your message to the AI...")
-        
-        if hasattr(self, 'ide_analyze_action') and hasattr(self, 'ide_language_combo'):
-            current_ide_lang = self.ide_language_combo.currentText()
-            can_analyze_ide = (current_ide_lang == "Python" or current_ide_lang.startswith("C/C++")) and is_online_and_key_present
-            self.ide_analyze_action.setEnabled(can_analyze_ide)
-            tooltip = "Analyze the current code with AI"
-            if not is_online_and_key_present:
-                tooltip += " (Requires Internet & API Key)"
-            elif not (current_ide_lang == "Python" or current_ide_lang.startswith("C/C++")):
-                 tooltip += " (Best for Python or C/C++)"
-            self.ide_analyze_action.setToolTip(tooltip)
-
-
-
-
-
-
     def _update_internet_status_display(self, is_connected: bool, message_detail: str): 
         full_status_text = f"Internet: {message_detail}"
         if hasattr(self, 'internet_status_label'):
@@ -2120,54 +1978,8 @@ class MainWindow(QMainWindow):
             self.internet_status_label.setStyleSheet(f"padding:0 5px;color:{text_color};")
         
         logging.debug("Internet Status Update: %s", message_detail)
-        
-        key_present = self.ai_chatbot_manager is not None and bool(self.ai_chatbot_manager.api_key)
-        ai_ready = is_connected and key_present
-        
         if hasattr(self.ai_chatbot_manager, 'set_online_status'):
-            self.ai_chatbot_manager.set_online_status(is_connected) # Worker also needs to know
-        
-        self._update_ai_features_enabled_state(ai_ready)
-        
-        # Update AI Chatbot Dock status label specifically
-        if hasattr(self, 'ai_chat_ui_manager') and self.ai_chat_ui_manager:
-            if not key_present:
-                self.ai_chat_ui_manager.update_status_display("Status: API Key required. Configure in Settings.")
-            elif not is_connected:
-                self.ai_chat_ui_manager.update_status_display("Status: Offline. AI features unavailable.")
-            # else: The AIChatbotManager will emit its own "Ready" or "Thinking" status
-
-    # In __init__ after AI manager setup, and after setting/clearing API key:
-    # self._update_ai_features_enabled_state(self._internet_connected and bool(self.ai_chatbot_manager.api_key))
-
-    # When API key is set/cleared in on_openai_settings (in AIChatUIManager, it calls manager.set_api_key):
-    # The manager's set_api_key already emits a statusUpdate. That signal is connected to 
-    # AIChatUIManager.update_status_display. We need to ensure that ui manager's update_status_display
-    # also considers calling _update_ai_features_enabled_state or that the main window's internet status update
-    # is re-triggered.
-    # A simpler way is that AIChatbotManager, after setting API key and initializing client,
-    # emits a specific signal or its usual statusUpdate which implicitly causes a refresh.
-    # The set_online_status in AIChatbotManager already updates its status.
-
-    # Let's ensure that when the API key changes, the global AI feature enable state is re-evaluated.
-    # In AIChatbotManager's set_api_key:
-    # After self._setup_worker() or emitting "Status: API Key cleared...":
-    # self.parent_window._update_ai_features_enabled_state_external() could be a new slot in MainWindow.
-
-    # Or, more cleanly, MainWindow connects to AIChatbotManager.statusUpdate
-    # and *also* calls _update_ai_features_enabled_state there.
-
-    # In MainWindow.__init__():
-    # self.ai_chatbot_manager.statusUpdate.connect(self._handle_ai_status_for_enable_update)
-
-    # @pyqtSlot(str)
-    # def _handle_ai_status_for_enable_update(self, status_text):
-    #     # This will be called by AI manager's own status updates
-    #     # We also need to check internet here to decide overall AI readiness
-    #     key_present = self.ai_chatbot_manager is not None and bool(self.ai_chatbot_manager.api_key)
-    #     ai_ready = self._internet_connected and key_present
-    #     self._update_ai_features_enabled_state(ai_ready)
-    #     # The AI Chat UI Manager will handle displaying the specific status_text from AI
+            self.ai_chatbot_manager.set_online_status(is_connected)
 
     def _update_py_sim_status_display(self): 
         if hasattr(self, 'py_sim_status_label'):
@@ -2194,197 +2006,6 @@ class MainWindow(QMainWindow):
         if self.py_sim_ui_manager: 
             self.py_sim_ui_manager._update_internal_controls_enabled_state()
 
-    # --- IDE Dock Methods ---
-    def _prompt_ide_save_if_dirty(self) -> bool:
-        if not self.ide_editor_is_dirty or not self.ide_code_editor:
-            return True
-        
-        file_desc = os.path.basename(self.current_ide_file_path) if self.current_ide_file_path else "Untitled Script"
-        reply = QMessageBox.question(self, "Save IDE Script?",
-                                     f"The script '{file_desc}' in the IDE has unsaved changes. Do you want to save them?",
-                                     QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-                                     QMessageBox.Save)
-        if reply == QMessageBox.Save:
-            return self.on_ide_save_file()
-        elif reply == QMessageBox.Cancel:
-            return False
-        return True # Discard
-
-    def on_ide_new_file(self):
-        if not self._prompt_ide_save_if_dirty():
-            return
-        if self.ide_code_editor:
-            self.ide_code_editor.clear()
-            self.ide_code_editor.setPlaceholderText("Create a new file or open an existing script...")
-        if self.ide_output_console:
-            self.ide_output_console.clear()
-            self.ide_output_console.setPlaceholderText("Script output will appear here...")
-        self.current_ide_file_path = None
-        self.ide_editor_is_dirty = False
-        self._update_ide_save_actions_enable_state()
-        self._update_window_title() # Update title to remove IDE file name if any
-        logger.info("IDE: New script created.")
-
-    def on_ide_open_file(self):
-        if not self._prompt_ide_save_if_dirty():
-            return
-        
-        start_dir = os.path.dirname(self.current_ide_file_path) if self.current_ide_file_path else QDir.homePath()
-        # Generic filter, can be expanded later
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Script File", start_dir, 
-                                                   "Python Files (*.py);;C/C++ Files (*.c *.cpp *.h *.ino);;Text Files (*.txt);;All Files (*)")
-        if file_path and self.ide_code_editor:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    self.ide_code_editor.setPlainText(f.read())
-                self.current_ide_file_path = file_path
-                self.ide_editor_is_dirty = False
-                self._update_ide_save_actions_enable_state()
-                self._update_window_title()
-                if self.ide_output_console: self.ide_output_console.clear()
-                logger.info("IDE: Opened script: %s", file_path)
-                # Update language combo based on extension (basic)
-                if hasattr(self, 'ide_language_combo'):
-                    ext = os.path.splitext(file_path)[1].lower()
-                    if ext == ".py": self.ide_language_combo.setCurrentText("Python")
-                    elif ext in [".ino", ".c", ".cpp", ".h"]: self.ide_language_combo.setCurrentText("C/C++ (Arduino)") # Or generic C++
-                    else: self.ide_language_combo.setCurrentText("Text")
-
-            except Exception as e:
-                QMessageBox.critical(self, "Error Opening Script", f"Could not load script from {file_path}:\n{e}")
-                logger.error("IDE: Failed to open script %s: %s", file_path, e)
-
-    def _save_ide_to_path(self, file_path) -> bool:
-        if not self.ide_code_editor: return False
-        try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(self.ide_code_editor.toPlainText())
-            self.current_ide_file_path = file_path
-            self.ide_editor_is_dirty = False
-            self._update_ide_save_actions_enable_state()
-            self._update_window_title()
-            logger.info("IDE: Saved script to: %s", file_path)
-            return True
-        except Exception as e:
-            QMessageBox.critical(self, "Error Saving Script", f"Could not save script to {file_path}:\n{e}")
-            logger.error("IDE: Failed to save script %s: %s", file_path, e)
-            return False
-
-    def on_ide_save_file(self) -> bool:
-        if not self.current_ide_file_path:
-            return self.on_ide_save_as_file()
-        if self.ide_editor_is_dirty: # Only save if actually dirty
-             return self._save_ide_to_path(self.current_ide_file_path)
-        return True # Not dirty, considered successful
-
-    def on_ide_save_as_file(self) -> bool:
-        default_filename = os.path.basename(self.current_ide_file_path or "untitled_script.py")
-        start_dir = os.path.dirname(self.current_ide_file_path) if self.current_ide_file_path else QDir.homePath()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Script As", os.path.join(start_dir, default_filename),
-                                                   "Python Files (*.py);;C/C++ Files (*.c *.cpp *.h *.ino);;Text Files (*.txt);;All Files (*)")
-        if file_path:
-            return self._save_ide_to_path(file_path)
-        return False
-
-    @pyqtSlot()
-    def _on_ide_text_changed(self):
-        if not self.ide_editor_is_dirty:
-            self.ide_editor_is_dirty = True
-            self._update_ide_save_actions_enable_state()
-            self._update_window_title() # Show asterisk for IDE if dirty
-
-    @pyqtSlot(str)
-    def _on_ide_language_changed(self, language: str):
-        if self.ide_code_editor:
-            self.ide_code_editor.set_language(language)
-
-        if self.ide_run_script_action:
-            is_python = (language == "Python")
-            self.ide_run_script_action.setEnabled(is_python)
-            self.ide_run_script_action.setToolTip("Run the current Python script in the editor" if is_python else "Run is currently only supported for Python scripts")
-        if self.ide_analyze_action:
-            # Enable AI analysis for Python and C/C++ if API key is set
-            can_analyze = (language == "Python" or language.startswith("C/C++")) and \
-                          self.ai_chatbot_manager is not None and \
-                          self.ai_chatbot_manager.api_key is not None
-            self.ide_analyze_action.setEnabled(can_analyze)
-            self.ide_analyze_action.setToolTip("Analyze the current code with AI" if can_analyze else "Configure AI API Key and select Python or C/C++ to enable analysis")
-        
-        logger.info(f"IDE: Language changed to {language}.")
-
-
-    @pyqtSlot()
-    def on_ide_run_python_script(self):
-        if not self.ide_code_editor or not self.ide_output_console:
-            logger.error("IDE: Code editor or output console not available for running script.")
-            return
-        
-        if self.ide_language_combo.currentText() != "Python":
-            QMessageBox.information(self, "Run Script", "Currently, only Python scripts can be run directly from the IDE.")
-            return
-
-        code_to_run = self.ide_code_editor.toPlainText()
-        if not code_to_run.strip():
-            self.ide_output_console.setHtml("<i>No Python code to run.</i>") # Use setHtml for italics
-            return
-
-        self.ide_output_console.clear()
-        self.ide_output_console.append(f"<i style='color:grey;'>Running Python script at {QTime.currentTime().toString('hh:mm:ss')}...</i><hr>")
-
-        # Prepare a restricted environment
-        # For now, very basic. Could be expanded with fsm_simulator.SAFE_BUILTINS
-        script_globals = {"__name__": "__ide_script__"}
-        script_locals = {}
-
-        stdout_capture = io.StringIO()
-        stderr_capture = io.StringIO()
-
-        try:
-            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
-                exec(code_to_run, script_globals, script_locals)
-            
-            self.ide_output_console.append(html.escape(stdout_capture.getvalue()))
-            err_output = stderr_capture.getvalue()
-            if err_output:
-                self.ide_output_console.append(f"<pre style='color:red;'>{html.escape(err_output)}</pre>")
-            self.ide_output_console.append("<hr><i style='color:grey;'>Execution finished.</i>")
-        except Exception as e:
-            # Import traceback here as it's only needed for exception handling
-            import traceback
-            self.ide_output_console.append(f"<pre style='color:red;'><b>Error during execution:</b>\n{html.escape(str(e))}\n--- Traceback ---\n{html.escape(traceback.format_exc())}</pre>")
-            self.ide_output_console.append("<hr><i style='color:red;'>Execution failed.</i>")
-        finally:
-            stdout_capture.close()
-            stderr_capture.close()
-            self.ide_output_console.ensureCursorVisible()
-
-    @pyqtSlot()
-    def on_ide_analyze_with_ai(self):
-        if not self.ide_code_editor or not self.ide_output_console:
-            logger.error("IDE: Code editor or output console not available for AI analysis.")
-            return
-        if not self.ai_chatbot_manager or not self.ai_chatbot_manager.api_key:
-            QMessageBox.warning(self, "AI Assistant Not Ready", "Please configure your OpenAI API key in AI Assistant Settings to use this feature.")
-            return
-
-        code_to_analyze = self.ide_code_editor.toPlainText()
-        if not code_to_analyze.strip():
-            self.ide_output_console.setHtml("<i>No code to analyze.</i>")
-            return
-
-        selected_language = self.ide_language_combo.currentText()
-        language_context = ""
-        if "Arduino" in selected_language: language_context = "for Arduino"
-        elif "C/C++" in selected_language: language_context = "for generic C/C++"
-        elif "Python" in selected_language: language_context = "for Python"
-
-        prompt = f"Please review the following {selected_language} code snippet {language_context}. Check for syntax errors, common programming mistakes, potential bugs, or suggest improvements. Provide feedback and, if there are issues, offer a corrected version or explain the problem:\n\n```\n{code_to_analyze}\n```"
-        
-        self.ide_output_console.append(f"<i style='color:grey;'>Sending code to AI for analysis ({selected_language})... (Response will appear in main AI Chat window)</i><hr>")
-        # For simplicity, we'll just add this request to the main AI chat window
-        self.ai_chat_ui_manager._append_to_chat_display("IDE", f"Requesting AI analysis for the current script ({selected_language}).")
-        self.ai_chatbot_manager.send_message(prompt)
-
 
     def log_message(self, level_str: str, message: str): 
         level = getattr(logging, level_str.upper(), logging.INFO)
@@ -2397,7 +2018,6 @@ if __name__ == '__main__':
     if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-    import traceback # Make sure traceback is imported for on_ide_run_python_script
     app_dir = os.path.dirname(os.path.abspath(__file__))
     deps_icons_dir = os.path.join(app_dir, "dependencies", "icons")
     if not os.path.exists(deps_icons_dir):

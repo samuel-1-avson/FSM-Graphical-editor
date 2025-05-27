@@ -2,114 +2,62 @@
 from PyQt5.QtGui import QColor
 
 # --- Configuration ---
-APP_VERSION = "1.7.1" # Added IDE features for embedded
+APP_VERSION = "1.7.0" # Added Python FSM Simulation
 APP_NAME = "Brain State Machine Designer"
 FILE_EXTENSION = ".bsm"
 FILE_FILTER = f"Brain State Machine Files (*{FILE_EXTENSION});;All Files (*)"
 
-# --- Execution Environments and Snippets ---
-EXECUTION_ENV_PYTHON_GENERIC = "Python (Generic Simulation)"
-EXECUTION_ENV_ARDUINO_CPP = "Arduino (C++)"
-EXECUTION_ENV_RASPBERRYPI_PYTHON = "RaspberryPi (Python)"
-EXECUTION_ENV_MICROPYTHON = "MicroPython"
-EXECUTION_ENV_C_GENERIC = "C (Generic Embedded)"
-
-# Default environment for new actions
-DEFAULT_EXECUTION_ENV = EXECUTION_ENV_PYTHON_GENERIC
-
-MECHATRONICS_SNIPPETS = {
-    EXECUTION_ENV_PYTHON_GENERIC: {
-        "actions": {
-            "Print Message": "print('My message')",
-            "Set Variable": "my_var = 10",
-            "Increment Variable": "counter_var = counter_var + 1",
-            "Conditional Print": "if condition_var:\n    print('Condition met')",
-            "Log Value": "print(f'Value of x: {x_variable}')" # Python 3.6+ f-string
-        },
-        "events": { # Events are usually simple strings, less language-specific for triggering
-            "Timeout Event": "timeout_event",
-            "Sensor Trigger": "sensor_triggered",
-            "User Input": "user_input_received",
-        },
-        "conditions": {
-            "Variable Equals": "my_var == 10",
-            "Variable Greater Than": "counter_var > 5",
-            "Flag is True": "is_ready_flag", # Assumes boolean variable
-            "Function Returns True": "check_condition_function()",
-        }
-    },
-    EXECUTION_ENV_ARDUINO_CPP: {
-        "actions": {
-            "Digital Write High": "digitalWrite(PIN_NUMBER, HIGH);",
-            "Digital Write Low": "digitalWrite(PIN_NUMBER, LOW);",
-            "Analog Read": "int sensorValue = analogRead(ANALOG_PIN);",
-            "Serial Print": "Serial.println(\"Hello, Arduino!\");",
-            "Delay Milliseconds": "delay(1000); // Pauses for 1 second",
-            "Set Pin Mode Output": "pinMode(PIN_NUMBER, OUTPUT);",
-            "Set Pin Mode Input": "pinMode(PIN_NUMBER, INPUT);",
-        },
-        "events": {
-            "Button Press (Interrupt)": "button_interrupt_event", # Placeholder, actual handling is complex
-            "Timer Overflow": "timer_overflow_event",
-        },
-        "conditions": {
-            "Digital Read High": "digitalRead(PIN_NUMBER) == HIGH",
-            "Variable Equals": "variable_name == 100",
-            "Millis Timeout": "(millis() - last_timestamp) > TIMEOUT_INTERVAL",
-        }
-    },
-    EXECUTION_ENV_RASPBERRYPI_PYTHON: {
-        "actions": {
-            "GPIO Output High (RPi.GPIO)": "import RPi.GPIO as GPIO\nGPIO.setmode(GPIO.BCM) # or GPIO.BOARD\nGPIO.setup(PIN_NUMBER, GPIO.OUT)\nGPIO.output(PIN_NUMBER, GPIO.HIGH)",
-            "GPIO Output Low (RPi.GPIO)": "import RPi.GPIO as GPIO\nGPIO.output(PIN_NUMBER, GPIO.LOW)",
-            "Read GPIO Input (RPi.GPIO)": "import RPi.GPIO as GPIO\nGPIO.setup(PIN_NUMBER, GPIO.IN)\ninput_value = GPIO.input(PIN_NUMBER)",
-            "Print to Console": "print('RPi Log: Message')",
-            "Sleep Seconds": "import time\ntime.sleep(1.0)",
-        },
-        "events": {
-            "GPIO Interrupt": "gpio_interrupt_event",
-            "Network Message": "network_message_received",
-        },
-        "conditions": {
-            "GPIO Input is High": "GPIO.input(PIN_NUMBER) == GPIO.HIGH", # Assumes RPi.GPIO imported and set up
-            "Check File Exists": "import os\nos.path.exists('/path/to/file')",
-        }
-    },
-    EXECUTION_ENV_MICROPYTHON: {
-        "actions": {
-            "Pin Output High": "from machine import Pin\npin = Pin(PIN_NUMBER, Pin.OUT)\npin.on() # or pin.value(1)",
-            "Pin Output Low": "from machine import Pin\npin = Pin(PIN_NUMBER, Pin.OUT)\npin.off() # or pin.value(0)",
-            "Read Pin Input": "from machine import Pin\npin = Pin(PIN_NUMBER, Pin.IN, Pin.PULL_UP)\nvalue = pin.value()",
-            "ADC Read": "from machine import ADC\nadc = ADC(Pin(ADC_PIN_NUMBER))\nvalue = adc.read_u16()",
-            "Delay Milliseconds": "import time\ntime.sleep_ms(100)",
-        },
-        "events": {
-            "Pin Interrupt": "pin_interrupt_event",
-            "Timer Callback": "timer_callback_event",
-        },
-        "conditions": {
-            "Pin Value is High": "pin_instance.value() == 1",
-            "Variable Check": "some_variable > THRESHOLD",
-        }
-    },
-    EXECUTION_ENV_C_GENERIC: {
-        "actions": {
-            "Set Register Bit": "REGISTER_NAME |= (1 << BIT_POSITION);",
-            "Clear Register Bit": "REGISTER_NAME &= ~(1 << BIT_POSITION);",
-            "Toggle Register Bit": "REGISTER_NAME ^= (1 << BIT_POSITION);",
-            "Write to Port": "PORT_ADDRESS = 0xFF;",
-            "Basic Delay Loop": "for(volatile int i=0; i<10000; i++); // Simple delay",
-        },
-        "events": {
-            "Hardware Interrupt": "ISR_event_flag_set",
-            "Watchdog Timeout": "watchdog_timeout_event",
-        },
-        "conditions": {
-            "Check Register Bit": "(REGISTER_NAME & (1 << BIT_POSITION)) != 0",
-            "Compare Values": "sensor_reading > THRESHOLD_VALUE",
-        }
-    }
+# --- Mechatronics/Embedded Snippets ---
+MECHATRONICS_COMMON_ACTIONS = {
+    "Digital Output (High)": "set_digital_output(PIN_NUMBER, 1); % Set pin HIGH",
+    "Digital Output (Low)": "set_digital_output(PIN_NUMBER, 0); % Set pin LOW",
+    "Read Digital Input": "input_value = read_digital_input(PIN_NUMBER);",
+    "Set PWM Duty Cycle": "set_pwm_duty_cycle(PWM_CHANNEL, DUTY_VALUE_0_255);",
+    "Read Analog Input": "sensor_value = read_adc_channel(ADC_CHANNEL);",
+    "Start Timer": "start_software_timer(TIMER_ID, DURATION_MS);",
+    "Stop Timer": "stop_software_timer(TIMER_ID);",
+    "Increment Counter": "counter_variable = counter_variable + 1;",
+    "Reset Counter": "counter_variable = 0;",
+    "Set Variable": "my_variable = NEW_VALUE;",
+    "Log Message": "log_event('Event description or variable_value');",
+    "Send CAN Message": "send_can_message(CAN_ID, [BYTE1, BYTE2, BYTE3]);",
+    "Set Motor Speed": "set_motor_speed(MOTOR_ID, SPEED_VALUE);",
+    "Set Motor Position": "set_motor_position(MOTOR_ID, POSITION_TARGET);",
+    "Open Solenoid Valve": "control_solenoid(VALVE_ID, VALVE_OPEN_CMD);",
+    "Close Solenoid Valve": "control_solenoid(VALVE_ID, VALVE_CLOSE_CMD);",
+    "Enable Component": "enable_subsystem(SUBSYSTEM_X, true);",
+    "Disable Component": "enable_subsystem(SUBSYSTEM_X, false);",
+    "Acknowledge Fault": "fault_acknowledged_flag = true;",
 }
+
+MECHATRONICS_COMMON_EVENTS = {
+    "Timer Timeout": "timeout(TIMER_ID)",
+    "Button Press": "button_pressed(BUTTON_NUMBER)",
+    "Sensor Threshold Breach": "sensor_threshold(SENSOR_NAME)",
+    "Data Packet Received": "data_reception_complete(CHANNEL)",
+    "Emergency Stop Active": "emergency_stop",
+    "Rising Edge Detection": "positive_edge(SIGNAL_NAME)",
+    "Falling Edge Detection": "negative_edge(SIGNAL_NAME)",
+    "Message Received": "msg_arrived(MSG_TYPE_ID)",
+    "System Error Occurred": "system_fault(FAULT_CODE)",
+    "User Input Event": "user_command(COMMAND_CODE)",
+}
+
+MECHATRONICS_COMMON_CONDITIONS = {
+    "Is System Safe": "is_safety_interlock_active() == false",
+    "Is Mode Nominal": "get_operating_mode() == NOMINAL_MODE",
+    "Counter Reached Limit": "retry_counter >= MAX_RETRIES",
+    "Variable is Value": "my_control_variable == TARGET_STATE_VALUE",
+    "Flag is True": "is_ready_flag == true",
+    "Flag is False": "is_busy_flag == false",
+    "Battery Level OK": "get_battery_voltage_mv() > MINIMUM_OPERATING_VOLTAGE_MV",
+    "Communication Healthy": "is_communication_link_up() == true",
+    "Sensor Value In Range": "(sensor_data >= SENSOR_MIN_VALID && sensor_data <= SENSOR_MAX_VALID)",
+    "Target Reached": "abs(current_position - target_position) < POSITION_TOLERANCE",
+    "Input Signal High": "read_digital_input(PIN_FOR_CONDITION) == 1",
+    "Input Signal Low": "read_digital_input(PIN_FOR_CONDITION) == 0",
+}
+
 
 # --- UI Styling and Theme Colors ---
 COLOR_BACKGROUND_LIGHT = "#F5F5F5"

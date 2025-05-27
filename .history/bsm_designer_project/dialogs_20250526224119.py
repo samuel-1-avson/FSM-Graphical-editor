@@ -227,7 +227,7 @@ class StatePropertiesDialog(QDialog):
         if is_new_state: self.name_edit.selectAll(); self.name_edit.setFocus()
 
     def _on_action_language_changed(self, language_mode: str):
-        self.entry_action_edit.set_language(language_mode)
+        self.entry_action_edit.setLanguage(language_mode)
         self.during_action_edit.setLanguage(language_mode)
         self.exit_action_edit.setLanguage(language_mode)
         
