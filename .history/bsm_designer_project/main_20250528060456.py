@@ -1078,7 +1078,7 @@ class MainWindow(QMainWindow):
         self.undo_action.setEnabled(self.undo_stack.canUndo())
         self.redo_action.setEnabled(self.undo_stack.canRedo())
         self.undo_action.setText(f"&Undo {self.undo_stack.undoText()}" if self.undo_stack.undoText() else "&Undo")
-        self.redo_action.setText(f"&Redo {self.undo_stack.redoText()}" if self.undo_stack.redoText() else "&Redo")
+        self.redo_action.setText(f"&Redo {self.redo_stack.redoText()}" if self.redo_stack.redoText() else "&Redo")
 
     def _update_matlab_status_display(self, connected, message):
         text_color = COLOR_PY_SIM_STATE_ACTIVE.name() if connected else "#C62828"

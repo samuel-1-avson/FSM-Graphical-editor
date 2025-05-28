@@ -13,15 +13,15 @@ class ChatbotWorker(QObject):
     errorOccurred = pyqtSignal(str)
     statusUpdate = pyqtSignal(str)
 
-    def __init__(self, api_key, model_name="gemini-1.5-flash-latest", parent=None):
+    def __init__(self, api_key, model_name="gemini-1.5-flash-latest", parent=None): # Changed default model
         super().__init__(parent)
         self.api_key = api_key
         self.model_name = model_name
-        self.client: genai.GenerativeModel | None = None
+        self.client: genai.GenerativeModel | None = None # Will store GenerativeModel instance
         self.conversation_history = []
-        self.current_diagram_context_json_str: str | None = None
+        self.current_diagram_context_json_str: str | None = None # Python type hint
         self._current_processing_had_error = False
-        self._is_stopped = False
+        self._is_stopped = False # Add a stop flag
         self._initialize_client()
         logger.info(f"ChatbotWorker initialized (Gemini API Key {'SET' if api_key else 'NOT SET'}).")
 
@@ -46,12 +46,15 @@ class ChatbotWorker(QObject):
             self.client = None
             logger.info("Gemini client not initialized (no API key).")
 
+    # Slot for API key - expects a string
     @pyqtSlot(str)
     def set_api_key_slot(self, api_key: str):
         logger.info(f"WORKER: set_api_key_slot called (new key {'SET' if api_key else 'NOT SET'}).")
         self.api_key = api_key
         self._initialize_client()
 
+    # Slot for diagram context - expects a string.
+    # The manager will ensure an empty string is passed if the context is None.
     @pyqtSlot(str)
     def set_diagram_context_slot(self, diagram_json_str: str):
         if not diagram_json_str:
@@ -61,6 +64,7 @@ class ChatbotWorker(QObject):
             logger.debug(f"WORKER: Setting diagram context. Length: {len(diagram_json_str)}")
             self.current_diagram_context_json_str = diagram_json_str
 
+    # Slot for processing message - expects string and bool
     @pyqtSlot(str, bool)
     def process_message_slot(self, user_message: str, force_fsm_generation: bool):
         if self._is_stopped:
@@ -68,6 +72,7 @@ class ChatbotWorker(QObject):
             return
 
         logger.info(f"WORKER_PROCESS: process_message_slot CALLED for: '{user_message[:50]}...' (force_fsm_generation={force_fsm_generation})")
+
         self._current_processing_had_error = False
 
         if not self.api_key or not self.client:
@@ -78,7 +83,7 @@ class ChatbotWorker(QObject):
             self._current_processing_had_error = True
             return
 
-        if self._is_stopped:
+        if self._is_stopped: # Check again before long operation
             logger.info("WORKER_PROCESS: Worker stopped before API call.")
             return
 
@@ -106,6 +111,7 @@ class ChatbotWorker(QObject):
                 "i2c", "spi", "sensor code", "actuator code", "mechatronics code",
                 "robotics code", "control system code", "firmware snippet"
             ]
+            # Search for whole words using regex to avoid partial matches like 'pi' in 'picture'
             user_msg_lower_for_embedded = user_message.lower()
             if any(re.search(r'\b' + re.escape(keyword) + r'\b', user_msg_lower_for_embedded) for keyword in embedded_keywords):
                 is_embedded_code_request = True
@@ -137,6 +143,7 @@ class ChatbotWorker(QObject):
                 system_prompt_content += " (Issue with diagram context string)."
         else:
              system_prompt_content += " No diagram context was provided for this request."
+
 
         if is_fsm_generation_attempt:
             system_prompt_content += (
@@ -173,168 +180,45 @@ class ChatbotWorker(QObject):
                  system_prompt_content += " For general conversation, provide helpful and concise answers."
 
         # Prepare contents for Gemini API
-        # The system prompt is part of the 'contents' list for some Gemini models/API usage patterns.
-        # It's also sometimes a separate parameter. We'll try with it as a separate param first,
-        # and if it fails (like the TypeError indicates), we'll then integrate it into the contents.
-        # For now, the TypeError already showed `system_instruction` is not accepted in this context.
-        # So, we should prepend it to `gemini_contents`.
-
         gemini_contents = []
-        # Add system prompt as the first element of the chat history for Gemini if system_instruction is not used.
-        # For Gemini, a system message isn't strictly "user" or "model",
-        # but usually, if you put it before the first user message, it acts as system instructions.
-        # Or, for newer models that support it, it can be a distinct `system_instruction` field.
-        # Given the TypeError, let's integrate it into the main content flow.
-        # A common pattern is to make the system prompt the first 'user' message
-        # if there's no dedicated system role. Or, prepend it to the first *actual* user message.
-        # Let's try sending it as the first "user" part, if no other history.
-        # If there is history, we'll just pass it to `system_instruction` and see if the library version handles it.
-
-        history_context_limit = -6
+        history_context_limit = -6 # How many pairs of user/assistant messages to include
+        # Each entry in self.conversation_history is already a dict like {'role': 'user', 'parts': [...]}
         if self.conversation_history:
             for msg in self.conversation_history[history_context_limit:]:
                 gemini_contents.append(msg)
-        
-        # Add current user message
         gemini_contents.append({"role": "user", "parts": [{"text": user_message}]})
-        
-        # Create a generation_config for Gemini
-        generation_config = genai.types.GenerationConfig(
-            temperature=0.7,
-        )
-        if is_fsm_generation_attempt:
-            generation_config.response_mime_type = "application/json"
-            logger.info("WORKER_PROCESS: Requesting JSON object format from Gemini.")
 
         try:
-            if self._is_stopped:
+            if self._is_stopped: # Final check
                 logger.info("WORKER_PROCESS: Worker stopped just before creating completion.")
                 return
 
-            # Check if system_instruction is supported by the model/client version
-            # For now, we'll try with system_instruction first, and catch the TypeError
-            # This allows it to work if a newer library version is used later.
-            
-            generation_args = {
-                "contents": gemini_contents,
-                "generation_config": generation_config,
-            }
-            
-            # Attempt to use system_instruction, but fallback if TypeError
-            # A more robust check would involve inspecting the genai.GenerativeModel instance
-            # or its methods, but for now, a try-except is simpler.
-            # Given the previous error, we'll go straight to not using it.
-            
-            # The system prompt content should be implicitly understood by Gemini if it's the
-            # first part of the conversation or used in a specific way.
-            # Let's ensure the system prompt is the very first thing sent if there's no history,
-            # or prepend it to the current user message if there is history.
-            # A cleaner way for models supporting `system_instruction` is preferred.
-            # Let's assume we'll put the system message at the start of the gemini_contents if no history.
-            
-            final_contents_for_api = []
-            if not self.conversation_history: # If no history, system prompt goes first (as a "user" message contextually)
-                # This is a common workaround if `system_instruction` is not available or desired.
-                # The model usually interprets the first message in a sequence as context/instruction.
-                # To be more explicit for Gemini, we could frame it:
-                # final_contents_for_api.append({"role": "user", "parts": [{"text": system_prompt_content}]})
-                # final_contents_for_api.extend(gemini_contents)
-                # However, for now, let's rely on the `system_instruction` field of `GenerativeModel` instance
-                # if the library version supports it (which the traceback shows it doesn't directly on `generate_content`).
-                # So, we'll prepend it to the user's message (or make it the first part of the chat).
+            generation_config = genai.types.GenerationConfig(
+                temperature=0.7, # Default, can be adjusted
+            )
 
-                # Let's try a structured approach for system instructions with Gemini:
-                # The `system_instruction` is applied at the model level `genai.GenerativeModel(..., system_instruction=...)`
-                # or can be passed to `ChatSession.send_message(..., system_instruction=...)`.
-                # Since we are using `generate_content` directly, and the earlier traceback showed
-                # `system_instruction` is not an argument for `generate_content` itself,
-                # we should rely on the system prompt being part of the model's configuration
-                # or implicitly handled by the model if it's the first message.
-                # The current `_initialize_client` does not pass `system_instruction`.
-                # So, we have to include it in the `contents`.
-                
-                # Option 1: Add system prompt as the first part of the `contents`
-                # This is usually how it's done if a dedicated system_instruction field isn't used at the API call level.
-                
-                # Let's modify gemini_contents directly
-                if system_prompt_content:
-                    # Prepend system prompt to the user's message's parts
-                    # This makes the system prompt part of the current turn.
-                    # A multi-turn aware way would be to have a ChatSession
-                    # Or, if the model is tuned for it, the system prompt can be the very first message.
-                    # For now, let's combine with the user message.
-                    # This is not ideal, but a workaround for the TypeError.
-                    # user_message_with_system_prompt = f"{system_prompt_content}\n\nUser: {user_message}"
-                    # current_turn_parts = [{"text": user_message_with_system_prompt}]
+            if is_fsm_generation_attempt:
+                generation_config.response_mime_type="application/json"
+                logger.info("WORKER_PROCESS: Requesting JSON object format from Gemini.")
 
-                    # Alternative: Make the system prompt the *first* "user" message in the whole sequence.
-                    # This only works well if conversation_history is empty.
-                    if not self.conversation_history:
-                         final_contents_for_api = [{"role": "user", "parts": [{"text": system_prompt_content}]}]
-                         final_contents_for_api.extend(gemini_contents) # gemini_contents now only has the current user message
-                    else:
-                        # If history exists, we can't easily inject a system message at the start of *that* history.
-                        # The system_prompt_content is already built based on context, so it should
-                        # just be used by the model as context for this specific turn.
-                        # In this case, it's best if `system_instruction` was a parameter to `GenerativeModel`
-                        # or `generate_content`. Since it's not for `generate_content` (per error),
-                        # the model is expected to infer system behavior from its fine-tuning and the user prompt structure.
-                        # Our `system_prompt_content` variable *already* contains dynamic context.
-                        # We will rely on `genai.GenerativeModel(self.model_name, system_instruction=system_prompt_content)` if that's supported.
-                        # Let's assume the error means `system_instruction` is for the Model itself, not generate_content.
-                        # So we should configure the model with it if it changes.
+            # This is the potentially long-running network call
+            # Use system_prompt_content for system_instruction
+            response = self.client.generate_content(
+                contents=gemini_contents,
+                generation_config=generation_config,
+                system_instruction=system_prompt_content # Pass system prompt here
+            )
 
-                        # Re-check: `genai.GenerativeModel` DOES accept `system_instruction`.
-                        # So the system prompt should be set there when the model instance is created or updated.
-                        # This implies that `_initialize_client` should take the system_prompt_content.
-                        # This is complex because system_prompt_content is dynamic per call.
-                        #
-                        # The most direct way for `generate_content` if `system_instruction` kwarg isn't available
-                        # for *that specific method call* is to prepend the system instructions to the actual user query,
-                        # or make it the first turn in `contents`.
-
-                        # Let's make `system_prompt_content` the effective first message passed in `contents`.
-                        # This means `gemini_contents` should be `[system_message_formatted_as_user, user_message, model_response, user_message, ...]`
-                        # Our current `gemini_contents` *already* holds the history.
-                        # The `system_prompt_content` is dynamic.
-                        # So, we format it as the first part of the *current* user's turn for `generate_content`.
-                        # This is a common pattern if a dedicated system prompt API field is not used for the call.
-                        
-                        # Simplest approach if system_instruction kwarg fails:
-                        # Combine system prompt with current user message.
-                        # This assumes the model can distinguish instructions from the user query.
-                        effective_user_message = f"{system_prompt_content}\n\nHuman: {user_message}"
-                        current_turn_parts = [{"text": effective_user_message}]
-                        
-                        # Rebuild gemini_contents for this call only, with prepended system instructions
-                        call_contents = []
-                        if self.conversation_history:
-                            call_contents.extend(self.conversation_history[history_context_limit:])
-                        call_contents.append({"role": "user", "parts": current_turn_parts})
-                        
-                        generation_args["contents"] = call_contents
-                        # No system_instruction in generation_args if it caused TypeError
-                    
-                    final_contents_for_api = generation_args["contents"] # Use the potentially modified contents
-
-                else: # No system_prompt_content (should not happen as it's initialized)
-                    final_contents_for_api = gemini_contents
-                
-                generation_args["contents"] = final_contents_for_api
-
-
-            response = self.client.generate_content(**generation_args)
-
-            if self._is_stopped:
+            if self._is_stopped: # Check if stopped during the API call
                 logger.info("WORKER_PROCESS: Worker stopped during/after API call, discarding response.")
                 return
 
             ai_response_content = ""
             if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
                 ai_response_content = response.candidates[0].content.parts[0].text
-            elif hasattr(response, 'text'):
+            elif hasattr(response, 'text'): # Fallback if structure is simpler
                 ai_response_content = response.text
-            else:
+            else: # Handle cases where the response might be blocked or empty
                 feedback = response.prompt_feedback if hasattr(response, 'prompt_feedback') else "No feedback."
                 finish_reason = response.candidates[0].finish_reason if response.candidates else "Unknown reason."
                 error_msg = f"Gemini response was empty or blocked. Finish Reason: {finish_reason}. Feedback: {feedback}"
@@ -343,7 +227,7 @@ class ChatbotWorker(QObject):
                 self._current_processing_had_error = True
                 return
 
-            self.conversation_history.append({"role": "user", "parts": [{"text": user_message}]}) # Original user message
+            self.conversation_history.append({"role": "user", "parts": [{"text": user_message}]})
             self.conversation_history.append({"role": "model", "parts": [{"text": ai_response_content}]})
             logger.debug("WORKER_PROCESS: AI response received and added to history.")
             self.responseReady.emit(ai_response_content, is_fsm_generation_attempt)
@@ -381,8 +265,8 @@ class ChatbotWorker(QObject):
             if not self._current_processing_had_error and self.client and not self._is_stopped:
                 self.statusUpdate.emit("Status: Ready.")
 
-    @pyqtSlot()
-    def clear_history_slot(self):
+    @pyqtSlot() # No name needed if Python method name matches slot name
+    def clear_history_slot(self): # Renamed for consistency
         self.conversation_history = []
         logger.info("Conversation history cleared.")
         self.statusUpdate.emit("Status: Chat history cleared.")
@@ -391,6 +275,8 @@ class ChatbotWorker(QObject):
     def stop_processing_slot(self):
         logger.info("WORKER: stop_processing_slot called.")
         self._is_stopped = True
+        # Note: This doesn't actively interrupt an ongoing openai.create call.
+        # For true interruption, more complex async handling or a different HTTP client would be needed.
 
 class AIChatbotManager(QObject):
     statusUpdate = pyqtSignal(str)
@@ -412,14 +298,15 @@ class AIChatbotManager(QObject):
         if self.chatbot_thread and self.chatbot_thread.isRunning():
             logger.debug("MGR_CLEANUP: Attempting to quit existing thread...")
             if self.chatbot_worker:
+                # Try to tell the worker to stop its current task if possible
                 QMetaObject.invokeMethod(self.chatbot_worker, "stop_processing_slot", Qt.QueuedConnection)
                 logger.debug("MGR_CLEANUP: stop_processing_slot invoked on worker.")
 
             self.chatbot_thread.quit()
-            if not self.chatbot_thread.wait(200):
+            if not self.chatbot_thread.wait(200): # Reduced wait time
                 logger.warning("MGR_CLEANUP: Thread did not quit gracefully. Terminating.")
                 self.chatbot_thread.terminate()
-                self.chatbot_thread.wait(100)
+                self.chatbot_thread.wait(100) # Brief wait after terminate
             logger.debug("MGR_CLEANUP: Existing thread stopped.")
         self.chatbot_thread = None
 
@@ -452,6 +339,7 @@ class AIChatbotManager(QObject):
             else:
                 self.statusUpdate.emit("Status: Gemini API Key cleared. AI Assistant inactive.")
         elif self.chatbot_worker and self.api_key and self.chatbot_thread and self.chatbot_thread.isRunning():
+             # Fixed QMetaObject.invokeMethod call using Q_ARG
              QMetaObject.invokeMethod(self.chatbot_worker, "set_api_key_slot", Qt.QueuedConnection,
                                       Q_ARG(str, self.api_key))
              self.statusUpdate.emit("Status: Ready. Gemini API Key re-confirmed.")
@@ -470,6 +358,7 @@ class AIChatbotManager(QObject):
 
         logger.info("MGR_SETUP_WORKER: Setting up new worker and thread.")
         self.chatbot_thread = QThread(self)
+        # self.chatbot_thread.setDaemon(True) # Option 1: Make it a daemon thread
         self.chatbot_worker = ChatbotWorker(self.api_key)
         self.chatbot_worker.moveToThread(self.chatbot_thread)
 
@@ -544,12 +433,17 @@ class AIChatbotManager(QObject):
              diagram_json_str = json.dumps({"error": "Diagram context unavailable."})
 
         if self.chatbot_worker:
+            # Ensure string is passed to slot expecting string
             effective_diagram_json_str = diagram_json_str if diagram_json_str is not None else ""
+
+            # Fixed QMetaObject.invokeMethod calls using Q_ARG instead of QGenericArgument
             QMetaObject.invokeMethod(self.chatbot_worker, "set_diagram_context_slot", Qt.QueuedConnection,
                                      Q_ARG(str, effective_diagram_json_str))
+
             QMetaObject.invokeMethod(self.chatbot_worker, "process_message_slot", Qt.QueuedConnection,
                                      Q_ARG(str, user_message_text),
                                      Q_ARG(bool, is_fsm_gen_specific))
+
             logger.debug("MGR_PREP_SEND: Methods queued for worker.")
             if self.parent_window and hasattr(self.parent_window, 'ai_chat_ui_manager') and self.parent_window.ai_chat_ui_manager:
                 self.parent_window.ai_chat_ui_manager.update_status_display("Status: Sending to AI...")
