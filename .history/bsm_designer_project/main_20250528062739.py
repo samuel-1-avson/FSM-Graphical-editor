@@ -200,7 +200,7 @@ class ResourceMonitorWorker(QObject):
     @pyqtSlot()
     def stop_monitoring(self):
         logger.info("ResourceMonitorWorker: stop_monitoring called.")
-        self._monitoring = False # This should be the primary flag the loop checks
+        self._monitoring = False
         if self._nvml_initialized and PYNVML_AVAILABLE and pynvml:
             try:
                 pynvml.nvmlShutdown()
@@ -216,8 +216,8 @@ class ResourceMonitorWorker(QObject):
         cycles_per_update = max(1, self.interval_ms // short_sleep_ms)
         current_cycle = 0
 
-        while self._monitoring: # Loop condition
-            if not self._monitoring: # Double check inside loop start
+        while self._monitoring:
+            if not self._monitoring:
                 break
 
             if current_cycle == 0:
@@ -283,12 +283,10 @@ class ResourceMonitorWorker(QObject):
                             logger.debug(f"NVML: Unexpected error getting GPU utilization: {e_util_other}")
                             gpu_util = -2.0
                             gpu_name_to_emit = "NVML Util Error"
-                    if self._monitoring: # Only emit if still supposed to be monitoring
-                        self.resourceUpdate.emit(cpu_usage, ram_percent, gpu_util, gpu_name_to_emit)
+                    self.resourceUpdate.emit(cpu_usage, ram_percent, gpu_util, gpu_name_to_emit)
                 except Exception as e:
                     logger.error(f"Error in resource monitoring data collection: {e}", exc_info=True)
-                    if self._monitoring: # Only emit if still supposed to be monitoring
-                        self.resourceUpdate.emit(-1.0, -1.0, -3.0, f"Monitor Error: {str(e)[:20]}")
+                    self.resourceUpdate.emit(-1.0, -1.0, -3.0, f"Monitor Error: {str(e)[:20]}")
 
             QThread.msleep(short_sleep_ms)
             current_cycle = (current_cycle + 1) % cycles_per_update
@@ -1540,27 +1538,20 @@ class MainWindow(QMainWindow):
         if self.resource_monitor_thread and self.resource_monitor_thread.isRunning():
             logger.info("Stopping resource monitor worker and thread...")
             if self.resource_monitor_worker:
-                # Explicitly set the flag first from the main thread.
-                # This ensures the worker's loop condition becomes false immediately.
-                self.resource_monitor_worker._monitoring = False
-                logger.debug("Resource worker _monitoring flag set to False.")
-                
-                # Invoke stop_monitoring to handle any internal cleanup in the worker, like NVML shutdown.
-                # Using BlockingQueuedConnection can be problematic if the worker's event loop is busy or not running.
-                # A direct call or a QueuedConnection might be safer if the _monitoring flag is the primary loop control.
-                # Let's try QueuedConnection first, as BlockingQueuedConnection can deadlock if not careful.
-                # If stop_monitoring relies on the event loop, this is fine.
-                # If stop_monitoring does long-running things itself, it might still block.
-                # Given it mainly sets flags and calls nvmlShutdown, it should be quick.
-                QMetaObject.invokeMethod(self.resource_monitor_worker, "stop_monitoring", Qt.QueuedConnection)
-                logger.debug("stop_monitoring invoked on resource_monitor_worker (queued).")
+                # Use BlockingQueuedConnection to ensure stop_monitoring is processed before quit
+                # This relies on the worker's event loop processing the call.
+                # If worker is stuck in a long operation, this might still block.
+                # However, our worker uses short sleeps, so it should be responsive.
+                QMetaObject.invokeMethod(self.resource_monitor_worker, "stop_monitoring", Qt.BlockingQueuedConnection)
+                logger.debug("stop_monitoring invoked on resource_monitor_worker (blocking).")
 
             self.resource_monitor_thread.quit()
             logger.debug("resource_monitor_thread.quit() called.")
 
-            wait_time_ms = 200
+            wait_time_ms = 200 # Default small wait
             if self.resource_monitor_worker and hasattr(self.resource_monitor_worker, 'interval_ms'):
-                wait_time_ms = self.resource_monitor_worker.interval_ms + 500 # Give a bit more margin
+                # Add a margin to the worker's own update interval
+                wait_time_ms = self.resource_monitor_worker.interval_ms + 500
             else:
                 logger.warning("ResourceMonitorWorker or interval_ms not available, using default wait time for shutdown (2500ms).")
                 wait_time_ms = 2500
@@ -1568,7 +1559,7 @@ class MainWindow(QMainWindow):
             if not self.resource_monitor_thread.wait(wait_time_ms):
                 logger.warning(f"Resource monitor thread did not quit gracefully after {wait_time_ms}ms. Terminating.")
                 self.resource_monitor_thread.terminate()
-                if not self.resource_monitor_thread.wait(500):
+                if not self.resource_monitor_thread.wait(500): # Brief wait after terminate
                     logger.error("Resource monitor thread failed to terminate forcefully.")
             else:
                 logger.info("Resource monitor thread stopped gracefully.")
