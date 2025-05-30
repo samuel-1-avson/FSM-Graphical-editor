@@ -2078,4 +2078,3 @@ if __name__ == '__main__':
     main_win = MainWindow()
     main_win.show()
     sys.exit(app.exec_())
-    pass

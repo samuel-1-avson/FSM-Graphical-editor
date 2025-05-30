@@ -843,19 +843,6 @@ class MainWindow(QMainWindow):
         self._update_py_sim_status_display()
         self._update_matlab_actions_enabled_state()
         self._update_py_simulation_actions_enabled_state()
-        
-        
-    @pyqtSlot(bool)
-    def on_toggle_snap_to_grid(self, checked):
-        self.scene.snap_to_grid_enabled = checked
-        logger.info(f"Snap to Grid {'enabled' if checked else 'disabled'}.")
-        
-        
-        
-    @pyqtSlot(bool)
-    def on_toggle_snap_to_objects(self, checked):
-        self.scene.snap_to_objects_enabled = checked
-        logger.info(f"Snap to Objects {'enabled' if checked else 'disabled'}.")        
 
     @pyqtSlot(bool)
     def _handle_py_sim_global_ui_enable_by_manager(self, enable: bool):
@@ -2078,4 +2065,3 @@ if __name__ == '__main__':
     main_win = MainWindow()
     main_win.show()
     sys.exit(app.exec_())
-    pass

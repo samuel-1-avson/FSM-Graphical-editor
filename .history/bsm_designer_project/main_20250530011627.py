@@ -558,37 +558,6 @@ class MainWindow(QMainWindow):
         help_menu = menu_bar.addMenu("&Help")
         help_menu.addAction(self.quick_start_action)
         help_menu.addAction(self.about_action)
-        # Add to View Menu or create if it doesn't exist
-        if not hasattr(self, 'view_menu'):
-            self.view_menu = menu_bar.addMenu("&View")
-        self.view_menu.addSeparator()
-        snap_menu = self.view_menu.addMenu("Snapping")
-        snap_menu.addAction(self.snap_to_grid_action)
-        snap_menu.addAction(self.snap_to_objects_action)
-        self.view_menu.addSeparator() # Add separator after existing dock toggles if they are there
-
-        # ... (rest of _create_menus, ensuring view_menu dock toggles are added if not done before)
-        # Example: if self.tools_dock: self.view_menu.addAction(self.tools_dock.toggleViewAction())
-        # Ensure view_menu exists when adding dock toggles later if it's created here for the first time.
-
-        # Add dock toggles to view_menu if it's newly created or existing
-        # This section might need to be adjusted based on when _create_docks is called relative to _create_menus
-        if hasattr(self, 'view_menu'):
-            docks_to_add = []
-            if hasattr(self, 'tools_dock') and self.tools_dock: docks_to_add.append(self.tools_dock)
-            if hasattr(self, 'properties_dock') and self.properties_dock: docks_to_add.append(self.properties_dock)
-            if hasattr(self, 'log_dock') and self.log_dock: docks_to_add.append(self.log_dock)
-            if hasattr(self, 'py_sim_dock') and self.py_sim_dock: docks_to_add.append(self.py_sim_dock)
-            if hasattr(self, 'ai_chatbot_dock') and self.ai_chatbot_dock: docks_to_add.append(self.ai_chatbot_dock)
-            if hasattr(self, 'ide_dock') and self.ide_dock: docks_to_add.append(self.ide_dock)
-            
-            if docks_to_add and not any(action.text() == docks_to_add[0].windowTitle() for action in self.view_menu.actions()):
-                self.view_menu.addSeparator() # Add a separator before dock actions if not already there
-                for dock in docks_to_add:
-                    self.view_menu.addAction(dock.toggleViewAction())   
-                    
-                    
-        pass             
 
     def _create_toolbars(self):
         icon_size = QSize(22,22)
@@ -843,19 +812,6 @@ class MainWindow(QMainWindow):
         self._update_py_sim_status_display()
         self._update_matlab_actions_enabled_state()
         self._update_py_simulation_actions_enabled_state()
-        
-        
-    @pyqtSlot(bool)
-    def on_toggle_snap_to_grid(self, checked):
-        self.scene.snap_to_grid_enabled = checked
-        logger.info(f"Snap to Grid {'enabled' if checked else 'disabled'}.")
-        
-        
-        
-    @pyqtSlot(bool)
-    def on_toggle_snap_to_objects(self, checked):
-        self.scene.snap_to_objects_enabled = checked
-        logger.info(f"Snap to Objects {'enabled' if checked else 'disabled'}.")        
 
     @pyqtSlot(bool)
     def _handle_py_sim_global_ui_enable_by_manager(self, enable: bool):
@@ -2078,4 +2034,3 @@ if __name__ == '__main__':
     main_win = MainWindow()
     main_win.show()
     sys.exit(app.exec_())
-    pass

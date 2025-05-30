@@ -12,18 +12,18 @@ from config import (COLOR_ITEM_STATE_DEFAULT_BG, COLOR_ITEM_STATE_DEFAULT_BORDER
                     COLOR_ITEM_TRANSITION_DEFAULT, COLOR_ITEM_TRANSITION_SELECTION,
                     COLOR_ITEM_COMMENT_BG, COLOR_ITEM_COMMENT_BORDER,
                     COLOR_PY_SIM_STATE_ACTIVE, COLOR_PY_SIM_STATE_ACTIVE_PEN_WIDTH,
-                    COLOR_BACKGROUND_LIGHT, COLOR_BORDER_LIGHT, COLOR_ACCENT_PRIMARY, COLOR_ACCENT_PRIMARY_LIGHT,
+                    COLOR_BACKGROUND_LIGHT, COLOR_BORDER_LIGHT, COLOR_ACCENT_PRIMARY, COLOR_ACCENT_PRIMARY_LIGHT, # Added COLOR_ACCENT_PRIMARY_LIGHT
                     DEFAULT_EXECUTION_ENV, COLOR_TEXT_SECONDARY, COLOR_BACKGROUND_DIALOG)
 
 
-class GraphicsStateItem(QGraphicsRectItem): # Unchanged, shown for context
+class GraphicsStateItem(QGraphicsRectItem):
     Type = QGraphicsItem.UserType + 1
 
     def type(self): return GraphicsStateItem.Type
 
     def __init__(self, x, y, w, h, text, is_initial=False, is_final=False,
                  color=None, entry_action="", during_action="", exit_action="", description="",
-                 is_superstate=False, sub_fsm_data=None, action_language=DEFAULT_EXECUTION_ENV): 
+                 is_superstate=False, sub_fsm_data=None, action_language=DEFAULT_EXECUTION_ENV): # Added action_language
         super().__init__(x, y, w, h)
         self.text_label = text
         self.is_initial = is_initial
@@ -46,7 +46,7 @@ class GraphicsStateItem(QGraphicsRectItem): # Unchanged, shown for context
 
         self._text_color = QColor(COLOR_TEXT_PRIMARY)
         self._font = QFont(APP_FONT_FAMILY, 10, QFont.Bold)
-        self._border_pen_width = 1.8 
+        self._border_pen_width = 1.8 # Slightly thicker border for states
 
         self.setPen(QPen(self.border_color, self._border_pen_width))
         self.setBrush(QBrush(self.base_color))
@@ -56,9 +56,9 @@ class GraphicsStateItem(QGraphicsRectItem): # Unchanged, shown for context
         self.setAcceptHoverEvents(True)
 
         self.shadow_effect = QGraphicsDropShadowEffect()
-        self.shadow_effect.setBlurRadius(12) 
-        self.shadow_effect.setColor(QColor(0, 0, 0, 45)) 
-        self.shadow_effect.setOffset(3, 3) 
+        self.shadow_effect.setBlurRadius(12) # Softer, slightly larger shadow
+        self.shadow_effect.setColor(QColor(0, 0, 0, 45)) # Lighter shadow
+        self.shadow_effect.setOffset(3, 3) # Slightly larger offset
         self.setGraphicsEffect(self.shadow_effect)
 
         self.is_py_sim_active = False
@@ -67,32 +67,35 @@ class GraphicsStateItem(QGraphicsRectItem): # Unchanged, shown for context
     def paint(self, painter: QPainter, option, widget):
         painter.setRenderHint(QPainter.Antialiasing)
         current_rect = self.rect()
-        border_radius = 12 
+        border_radius = 12 # More rounded corners
 
         current_pen_to_use = self.pen()
         if self.is_py_sim_active:
-            py_sim_pen = QPen(COLOR_PY_SIM_STATE_ACTIVE, COLOR_PY_SIM_STATE_ACTIVE_PEN_WIDTH, Qt.SolidLine) 
+            py_sim_pen = QPen(COLOR_PY_SIM_STATE_ACTIVE, COLOR_PY_SIM_STATE_ACTIVE_PEN_WIDTH, Qt.SolidLine) # Solid for active
             current_pen_to_use = py_sim_pen
 
         painter.setPen(current_pen_to_use)
         painter.setBrush(self.brush())
         painter.drawRoundedRect(current_rect, border_radius, border_radius)
 
+        # Text styling
         painter.setPen(self._text_color)
         painter.setFont(self._font)
-        text_rect = current_rect.adjusted(10, 10, -10, -10) 
+        text_rect = current_rect.adjusted(10, 10, -10, -10) # More padding for text
         painter.drawText(text_rect, Qt.AlignCenter | Qt.TextWordWrap, self.text_label)
 
+        # Initial state marker
         if self.is_initial:
             marker_radius = 7; line_length = 20; marker_color = QColor(COLOR_TEXT_PRIMARY)
             start_marker_center_x = current_rect.left() - line_length - marker_radius / 2
             start_marker_center_y = current_rect.center().y()
             painter.setBrush(marker_color)
-            painter.setPen(QPen(marker_color, self._border_pen_width + 0.5)) 
+            painter.setPen(QPen(marker_color, self._border_pen_width + 0.5)) # Slightly thicker line for marker
             painter.drawEllipse(QPointF(start_marker_center_x, start_marker_center_y), marker_radius, marker_radius)
             line_start_point = QPointF(start_marker_center_x + marker_radius, start_marker_center_y)
             line_end_point = QPointF(current_rect.left(), start_marker_center_y)
             painter.drawLine(line_start_point, line_end_point)
+            # Arrowhead
             arrow_size = 9; angle_rad = 0 
             arrow_p1 = QPointF(line_end_point.x() - arrow_size * math.cos(angle_rad + math.pi / 6),
                                line_end_point.y() - arrow_size * math.sin(angle_rad + math.pi / 6))
@@ -100,34 +103,49 @@ class GraphicsStateItem(QGraphicsRectItem): # Unchanged, shown for context
                                line_end_point.y() - arrow_size * math.sin(angle_rad - math.pi / 6))
             painter.drawPolygon(QPolygonF([line_end_point, arrow_p1, arrow_p2]))
 
+        # Final state marker (double border)
         if self.is_final:
-            painter.setPen(QPen(self.border_color.darker(130), self._border_pen_width)) 
-            inner_rect = current_rect.adjusted(6, 6, -6, -6) 
+            painter.setPen(QPen(self.border_color.darker(130), self._border_pen_width)) # Ensure consistent thickness
+            inner_rect = current_rect.adjusted(6, 6, -6, -6) # Slightly larger gap for double border
             painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(inner_rect, border_radius - 4, border_radius - 4) 
+            painter.drawRoundedRect(inner_rect, border_radius - 4, border_radius - 4) # Adjust radius
 
+        # Superstate icon
         if self.is_superstate:
-            icon_w, icon_h = 12, 10 
+            icon_w, icon_h = 12, 10 # Smaller, more compact icon
             margin = 7
+            # Position in bottom-right corner
             base_x = current_rect.right() - icon_w - margin
             base_y = current_rect.bottom() - icon_h - margin
+            
             pen_color = self.border_color.darker(150)
+            # If base_color is very dark, make icon lines lighter for contrast
             if self.base_color.lightnessF() < 0.3:
                 pen_color = self.border_color.lighter(150)
-                if pen_color == self.border_color: 
+                if pen_color == self.border_color: # Ensure it actually got lighter
                     pen_color = QColor(Qt.white) if self.base_color.lightnessF() < 0.1 else QColor(Qt.lightGray)
+
             painter.setPen(QPen(pen_color, 1.2))
             painter.setBrush(Qt.NoBrush)
+            
+            # Draw a small stack of rectangles
             rect1 = QRectF(base_x, base_y, icon_w, icon_h * 0.6)
             rect2 = QRectF(base_x + icon_w * 0.2, base_y + icon_h * 0.3, icon_w * 0.8, icon_h * 0.7)
-            painter.drawRect(rect2); painter.drawRect(rect1) 
+            painter.drawRect(rect2) # Draw back rectangle first
+            painter.drawRect(rect1) # Draw front rectangle
 
+
+        # Selection highlight
         if self.isSelected() and not self.is_py_sim_active:
-            selection_pen = QPen(QColor(COLOR_ITEM_STATE_SELECTION_BORDER), self._border_pen_width + 1, Qt.DashLine) 
-            selection_brush_color = QColor(COLOR_ITEM_STATE_SELECTION_BG); selection_brush_color.setAlpha(80) 
-            selection_rect = self.boundingRect().adjusted(-2, -2, 2, 2) 
-            painter.setPen(selection_pen); painter.setBrush(QBrush(selection_brush_color)) 
+            selection_pen = QPen(QColor(COLOR_ITEM_STATE_SELECTION_BORDER), self._border_pen_width + 1, Qt.DashLine) # Dash line for selection
+            selection_brush_color = QColor(COLOR_ITEM_STATE_SELECTION_BG)
+            selection_brush_color.setAlpha(80) # Semi-transparent fill for selection
+            
+            selection_rect = self.boundingRect().adjusted(-2, -2, 2, 2) # Slightly larger highlight rect
+            painter.setPen(selection_pen)
+            painter.setBrush(QBrush(selection_brush_color)) # Use brush for selection
             painter.drawRoundedRect(selection_rect, border_radius + 2, border_radius + 2)
+
 
     def set_py_sim_active_style(self, active: bool):
         if self.is_py_sim_active == active: return
@@ -169,8 +187,11 @@ class GraphicsStateItem(QGraphicsRectItem): # Unchanged, shown for context
         if self.is_initial != is_initial: self.is_initial = is_initial; changed = True
         if self.is_final != is_final: self.is_final = is_final; changed = True
         if self.action_language != action_language: self.action_language = action_language; changed = True
+
         if is_superstate_prop is not None and self.is_superstate != is_superstate_prop:
-            self.is_superstate = is_superstate_prop; changed = True
+            self.is_superstate = is_superstate_prop
+            changed = True
+        
         if sub_fsm_data_prop is not None:
             if isinstance(sub_fsm_data_prop, dict) and \
                all(k in sub_fsm_data_prop for k in ['states', 'transitions', 'comments']) and \
@@ -178,27 +199,39 @@ class GraphicsStateItem(QGraphicsRectItem): # Unchanged, shown for context
                isinstance(sub_fsm_data_prop['transitions'], list) and \
                isinstance(sub_fsm_data_prop['comments'], list):
                 if self.sub_fsm_data != sub_fsm_data_prop:
-                     self.sub_fsm_data = sub_fsm_data_prop; changed = True
-            elif self.is_superstate: pass 
+                     self.sub_fsm_data = sub_fsm_data_prop
+                     changed = True
+            elif self.is_superstate: 
+                print(f"Warning: Invalid sub_fsm_data provided for superstate '{name}'. Resetting to empty.")
+                pass 
+
         new_base_color = QColor(color_hex) if color_hex and QColor(color_hex).isValid() else QColor(COLOR_ITEM_STATE_DEFAULT_BG)
         new_border_color = new_base_color.darker(120) if color_hex and QColor(color_hex).isValid() else QColor(COLOR_ITEM_STATE_DEFAULT_BORDER)
+
         if self.base_color != new_base_color:
-            self.base_color = new_base_color; self.border_color = new_border_color
+            self.base_color = new_base_color
+            self.border_color = new_border_color
             self.setBrush(self.base_color)
             new_pen = QPen(self.border_color, self._border_pen_width)
             if not self.is_py_sim_active: self.setPen(new_pen)
-            self.original_pen_for_py_sim_restore = new_pen; changed = True
+            self.original_pen_for_py_sim_restore = new_pen
+            changed = True
+
         if self.entry_action != entry: self.entry_action = entry; changed = True
         if self.during_action != during: self.during_action = during; changed = True
         if self.exit_action != exit_a: self.exit_action = exit_a; changed = True
         if self.description != desc: self.description = desc; changed = True
-        if changed: self.prepareGeometryChange(); self.update()
+
+        if changed:
+            self.prepareGeometryChange()
+            self.update()
+
 
 class GraphicsTransitionItem(QGraphicsPathItem):
     Type = QGraphicsItem.UserType + 2
     def type(self): return GraphicsTransitionItem.Type
 
-    CONTROL_POINT_SIZE = 8 
+    CONTROL_POINT_SIZE = 8 # Diameter of the control point handle
 
     def __init__(self, start_item, end_item, event_str="", condition_str="", action_str="",
                  color=None, description="", action_language=DEFAULT_EXECUTION_ENV): 
@@ -253,15 +286,13 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         if self.start_item == self.end_item:
             rect = self.start_item.sceneBoundingRect()
             p1_scene = QPointF(rect.center().x() + rect.width() * 0.2, rect.top())
-            loop_radius_x = rect.width() * 0.45 # Base dimensions for loop curvature
+            loop_radius_x = rect.width() * 0.45
             loop_radius_y = rect.height() * 0.55
-            # A base control point position if offset was (0,0) - this is a design choice for the default loop shape
-            base_cp_x = p1_scene.x() # Aligned with p1 for simplicity of offset application
-            base_cp_y = p1_scene.y() - loop_radius_y * 1.5 # Example: make it go "up"
-            
-            # Apply the user's offset to this conceptual base control point
-            return QPointF(base_cp_x + self.control_point_offset.x(),
-                           base_cp_y + self.control_point_offset.y())
+            base_ctrl1_x = p1_scene.x() + loop_radius_x * 0.8
+            base_ctrl1_y = p1_scene.y() - loop_radius_y * 2.2
+            # For self-loops, control_point_offset directly modifies this single conceptual control point's base
+            return QPointF(base_ctrl1_x + self.control_point_offset.x(),
+                           base_ctrl1_y + self.control_point_offset.y())
 
         mid_x = (start_point.x() + end_point.x()) / 2
         mid_y = (start_point.y() + end_point.y()) / 2
@@ -279,35 +310,18 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         return QPointF(ctrl_pt_x, ctrl_pt_y)
         
     def _get_control_point_rect(self) -> QRectF:
-        if not self.isSelected(): # Only show/interact with CP if selected
-            return QRectF()
+        # Control point is visible if the item is selected AND
+        # (it's a self-loop OR it has a non-zero offset for curving)
+        is_curved_or_loop = (self.control_point_offset.x() != 0 or \
+                             self.control_point_offset.y() != 0 or \
+                             self.start_item == self.end_item)
 
-        cp_pos = self._get_actual_control_point_scene_pos()
-
-        # For non-self-loops that are straight (no offset), create a default handle position.
-        if self.start_item != self.end_item and \
-           self.control_point_offset.x() == 0 and self.control_point_offset.y() == 0:
-            if self.path().elementCount() > 0:
-                mid_point = self.path().pointAtPercent(0.5)
-                if self.start_item and self.end_item: # Should always be true here
-                    start_center = self.start_item.sceneBoundingRect().center()
-                    end_center = self.end_item.sceneBoundingRect().center()
-                    line_vec = end_center - start_center
-                    # Default offset for the handle (e.g., above the line)
-                    default_offset_dist = -self.CONTROL_POINT_SIZE * 1.5 
-                    if line_vec.manhattanLength() > 1e-6:
-                        perp_vec_normalized = QPointF(-line_vec.y(), line_vec.x()) / math.hypot(line_vec.x(), line_vec.y())
-                        cp_pos = mid_point + perp_vec_normalized * default_offset_dist
-                    else: # Should be a self-loop, handled above, but as fallback
-                        cp_pos = mid_point + QPointF(0, default_offset_dist)
-                else: # Fallback if items are None
-                     cp_pos = mid_point + QPointF(0, default_offset_dist)
-            else: # Path not defined
-                return QRectF()
-        
-        return QRectF(cp_pos.x() - self.CONTROL_POINT_SIZE / 2, 
-                      cp_pos.y() - self.CONTROL_POINT_SIZE / 2,
-                      self.CONTROL_POINT_SIZE, self.CONTROL_POINT_SIZE)
+        if self.isSelected() and is_curved_or_loop:
+            cp_pos = self._get_actual_control_point_scene_pos()
+            return QRectF(cp_pos.x() - self.CONTROL_POINT_SIZE / 2, 
+                          cp_pos.y() - self.CONTROL_POINT_SIZE / 2,
+                          self.CONTROL_POINT_SIZE, self.CONTROL_POINT_SIZE)
+        return QRectF() # Empty if not visible
 
 
     def _compose_label_string(self):
@@ -322,12 +336,12 @@ class GraphicsTransitionItem(QGraphicsPathItem):
 
     def hoverEnterEvent(self, event: QGraphicsSceneMouseEvent):
         self.setPen(QPen(self.base_color.lighter(130), self._pen_width + 0.8)) 
-        self.update() 
+        self.update() # Ensure repaint to show hover effect
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event: QGraphicsSceneMouseEvent):
         self.setPen(QPen(self.base_color, self._pen_width))
-        self.update() 
+        self.update() # Ensure repaint to revert hover effect
         super().hoverLeaveEvent(event)
 
     def boundingRect(self):
@@ -346,9 +360,9 @@ class GraphicsTransitionItem(QGraphicsPathItem):
                                     text_actual_rect.width() + 20, text_actual_rect.height() + 20) 
             path_bounds = path_bounds.united(text_render_rect)
         
-        cp_rect = self._get_control_point_rect() 
+        cp_rect = self._get_control_point_rect() # Get rect, it will be empty if CP not visible
         if not cp_rect.isEmpty():
-            path_bounds = path_bounds.united(cp_rect.adjusted(-self.CONTROL_POINT_SIZE, -self.CONTROL_POINT_SIZE, self.CONTROL_POINT_SIZE, self.CONTROL_POINT_SIZE)) 
+            path_bounds = path_bounds.united(cp_rect.adjusted(-self.CONTROL_POINT_SIZE, -self.CONTROL_POINT_SIZE, self.CONTROL_POINT_SIZE, self.CONTROL_POINT_SIZE)) # Enlarge for interaction padding
                 
         return path_bounds.adjusted(-extra, -extra, extra, extra)
 
@@ -361,6 +375,7 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         cp_rect = self._get_control_point_rect()
         if not cp_rect.isEmpty():
             cp_path = QPainterPath()
+            # Make the shape for CP a bit larger for easier clicking
             cp_interaction_rect = cp_rect.adjusted(-2,-2,2,2)
             cp_path.addEllipse(cp_interaction_rect)
             base_shape.addPath(cp_path)
@@ -386,20 +401,32 @@ class GraphicsTransitionItem(QGraphicsPathItem):
             p1_scene = QPointF(rect.center().x() + rect.width() * 0.2, rect.top()) 
             p2_scene = QPointF(rect.center().x() - rect.width() * 0.2, rect.top())
             
-            user_manipulated_cp = self._get_actual_control_point_scene_pos()
-            # For cubic bezier, we need two control points.
-            # Derive them from the single user_manipulated_cp and the loop anchors.
-            # This creates a symmetrical curve around the user_manipulated_cp's y-influence.
-            # The x-influence of user_manipulated_cp primarily affects the "width" of the loop controls.
-            ctrl1_x = user_manipulated_cp.x() - (user_manipulated_cp.x() - p1_scene.x()) * 0.5 
-            ctrl1_y = user_manipulated_cp.y()
-            ctrl2_x = user_manipulated_cp.x() + (p2_scene.x() - user_manipulated_cp.x()) * 0.5
-            ctrl2_y = user_manipulated_cp.y()
+            # The control point for self-loop is _get_actual_control_point_scene_pos()
+            # which incorporates self.control_point_offset with the base loop shape.
+            # We need two Bezier control points for cubicTo.
+            # Let's derive them symmetrically from the single manipulated control point.
             
-            final_ctrl1 = QPointF(ctrl1_x, ctrl1_y)
-            final_ctrl2 = QPointF(ctrl2_x, ctrl2_y)
+            # Conceptual "peak" or main control point influenced by user dragging
+            user_manipulated_cp = self._get_actual_control_point_scene_pos()
 
-            path.moveTo(p1_scene); path.cubicTo(final_ctrl1, final_ctrl2, p2_scene)
+            # Heuristic: Place Bezier CPs somewhat aligned with this manipulated point,
+            # maintaining a reasonable loop shape. This part is tricky.
+            # A simpler approach for self-loops might be a different curve type or fixed CP relative positions.
+            # For now, let's make the two Bezier CPs somewhat related to user_manipulated_cp
+            # and the start/end points p1_scene, p2_scene.
+            
+            # Midpoint between p1_scene and user_manipulated_cp
+            ctrl1 = QPointF((p1_scene.x() + user_manipulated_cp.x()) / 2, (p1_scene.y() + user_manipulated_cp.y()) / 2 )
+            # Midpoint between user_manipulated_cp and p2_scene
+            ctrl2 = QPointF((user_manipulated_cp.x() + p2_scene.x()) / 2, (user_manipulated_cp.y() + p2_scene.y()) / 2 )
+            
+            # Add some outward "bulge" based on how far user_manipulated_cp is from the direct line p1_scene-p2_scene
+            loop_center_y_offset = (user_manipulated_cp.y() - p1_scene.y()) * 0.5 # How much peak is above
+            ctrl1.setY(ctrl1.y() + loop_center_y_offset * 0.5) # Push ctrl1 further up/down
+            ctrl2.setY(ctrl2.y() + loop_center_y_offset * 0.5) # Push ctrl2 further up/down
+
+
+            path.moveTo(p1_scene); path.cubicTo(ctrl1, ctrl2, p2_scene)
             end_point = p2_scene 
         else:
             if self.control_point_offset.x() == 0 and self.control_point_offset.y() == 0:
@@ -456,6 +483,10 @@ class GraphicsTransitionItem(QGraphicsPathItem):
         intersect_points = []
         for edge in edges:
             intersection_point_var = QPointF()
+            # Qt 5.10+ API:
+            # intersect_type, intersection_point_var = line.intersects(edge)
+            # if intersect_type == QLineF.IntersectionType.BoundedIntersection:
+            # For compatibility with older Qt (like 5.9 used in some environments):
             intersect_type = line.intersect(edge, intersection_point_var)
             if intersect_type == QLineF.BoundedIntersection:
                  intersect_points.append(QPointF(intersection_point_var))
@@ -482,7 +513,8 @@ class GraphicsTransitionItem(QGraphicsPathItem):
             painter.setBrush(highlight_color)
             painter.drawPath(selection_path_shape)
 
-            cp_rect = self._get_control_point_rect() # This now correctly determines if CP should be shown
+            # Draw control point handle if it's supposed to be visible
+            cp_rect = self._get_control_point_rect()
             if not cp_rect.isEmpty():
                 painter.setPen(QPen(QColor(COLOR_ACCENT_PRIMARY), 1.5))
                 fill_color = QColor(COLOR_ACCENT_PRIMARY_LIGHT)
@@ -552,16 +584,18 @@ class GraphicsTransitionItem(QGraphicsPathItem):
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
         if self.isSelected() and event.button() == Qt.LeftButton:
             cp_rect = self._get_control_point_rect()
-            if not cp_rect.isEmpty() and cp_rect.contains(event.scenePos()): 
+            if not cp_rect.isEmpty() and cp_rect.contains(event.scenePos()): # Check if click is on the CP
                 self._dragging_control_point = True
+                # Scene position of the click
                 self._last_mouse_press_pos_for_cp_drag = event.scenePos()
+                # Store the state of control_point_offset at the beginning of the drag
                 self._initial_cp_offset_on_drag_start = QPointF(self.control_point_offset)
                 self.setCursor(Qt.ClosedHandCursor)
                 event.accept()
-                return 
+                return # Consume event, don't pass to base or scene for item move
         
-        self._dragging_control_point = False 
-        super().mousePressEvent(event) 
+        self._dragging_control_point = False # Ensure it's false if not dragging CP
+        super().mousePressEvent(event) # Allow normal item selection/move
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
         if self._dragging_control_point:
@@ -573,6 +607,7 @@ class GraphicsTransitionItem(QGraphicsPathItem):
             delta_scene = event.scenePos() - self._last_mouse_press_pos_for_cp_drag
             
             if self.start_item == self.end_item:
+                # For self-loops, directly apply delta to the offset (simpler interaction)
                 new_offset_x = self._initial_cp_offset_on_drag_start.x() + delta_scene.x()
                 new_offset_y = self._initial_cp_offset_on_drag_start.y() + delta_scene.y()
             else: 
@@ -580,9 +615,9 @@ class GraphicsTransitionItem(QGraphicsPathItem):
                 end_rect_center = self.end_item.sceneBoundingRect().center()
                 line_vec = end_rect_center - start_rect_center
                 line_len = math.hypot(line_vec.x(), line_vec.y())
-                if line_len < 1e-6: line_len = 1e-6 # Avoid division by zero for coincident centers
+                if line_len < 1e-6: line_len = 1e-6
 
-                tangent_dir = line_vec / line_len if line_len > 0 else QPointF(1,0) # Default tangent if len is 0
+                tangent_dir = line_vec / line_len
                 perp_dir = QPointF(-tangent_dir.y(), tangent_dir.x())
 
                 delta_perp = QPointF.dotProduct(delta_scene, perp_dir)
@@ -604,17 +639,16 @@ class GraphicsTransitionItem(QGraphicsPathItem):
             if self.scene() and hasattr(self.scene(), 'undo_stack'):
                 from undo_commands import EditItemPropertiesCommand 
                 old_props = self.get_data()
-                # Important: The old_props for undo must reflect the state *before* this drag started
                 old_props['control_offset_x'] = self._initial_cp_offset_on_drag_start.x()
                 old_props['control_offset_y'] = self._initial_cp_offset_on_drag_start.y()
                 
-                new_props = self.get_data() # This will have the current (dragged) offsets
+                new_props = self.get_data() 
 
                 if old_props['control_offset_x'] != new_props['control_offset_x'] or \
                    old_props['control_offset_y'] != new_props['control_offset_y']:
                     cmd = EditItemPropertiesCommand(self, old_props, new_props, "Modify Transition Curve")
                     self.scene().undo_stack.push(cmd)
-                    self.scene().set_dirty(True) # Scene is modified by property change
+                    self.scene().set_dirty(True)
             event.accept()
             return
         super().mouseReleaseEvent(event)
@@ -646,8 +680,8 @@ class GraphicsTransitionItem(QGraphicsPathItem):
             self.base_color = new_color
             self.setPen(QPen(self.base_color, self._pen_width))
             changed = True
-        if offset is not None and self.control_point_offset != QPointF(offset): 
-            self.control_point_offset = QPointF(offset) 
+        if offset is not None and self.control_point_offset != QPointF(offset): # Ensure comparison with QPointF
+            self.control_point_offset = QPointF(offset) # Ensure it's QPointF
             changed = True 
         
         if changed: 
@@ -663,7 +697,7 @@ class GraphicsTransitionItem(QGraphicsPathItem):
             self.update() 
 
 
-class GraphicsCommentItem(QGraphicsTextItem): # Unchanged, shown for context
+class GraphicsCommentItem(QGraphicsTextItem):
     Type = QGraphicsItem.UserType + 3
     def type(self): return GraphicsCommentItem.Type
 
@@ -680,7 +714,9 @@ class GraphicsCommentItem(QGraphicsTextItem): # Unchanged, shown for context
         self.shadow_effect = QGraphicsDropShadowEffect()
         self.shadow_effect.setBlurRadius(10); self.shadow_effect.setColor(QColor(0, 0, 0, 40))
         self.shadow_effect.setOffset(2.5, 2.5); self.setGraphicsEffect(self.shadow_effect)
+        
         self.setDefaultTextColor(QColor(COLOR_TEXT_PRIMARY).darker(110)) 
+
         if self.document(): self.document().contentsChanged.connect(self._on_contents_changed)
 
     def _on_contents_changed(self):
@@ -692,7 +728,9 @@ class GraphicsCommentItem(QGraphicsTextItem): # Unchanged, shown for context
         painter.setPen(self.border_pen); painter.setBrush(self.background_brush)
         rect = self.boundingRect()
         painter.drawRoundedRect(rect.adjusted(0.5,0.5,-0.5,-0.5), 5, 5) 
+        
         super().paint(painter, option, widget) 
+
         if self.isSelected():
             selection_pen = QPen(QColor(COLOR_ACCENT_PRIMARY), 1.8, Qt.DashLine) 
             painter.setPen(selection_pen); painter.setBrush(Qt.NoBrush)
@@ -710,7 +748,9 @@ class GraphicsCommentItem(QGraphicsTextItem): # Unchanged, shown for context
         if current_text_width != target_width: width_changed = True
         if text_changed: self.setPlainText(text)
         if width_changed: self.setTextWidth(target_width)
-        if text_changed or width_changed : self.prepareGeometryChange(); self.update()
+        if text_changed or width_changed : 
+            self.prepareGeometryChange() 
+            self.update()
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged and self.scene():
