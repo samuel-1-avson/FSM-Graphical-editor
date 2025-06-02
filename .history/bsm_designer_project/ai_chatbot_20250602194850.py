@@ -26,7 +26,6 @@ from utils import get_standard_icon
 logger = logging.getLogger(__name__)
 
 class AIStatus(Enum):
-    # ... (AIStatus Enum definition remains the same) ...
     INITIALIZING = auto()
     READY = auto()
     THINKING = auto()
@@ -36,15 +35,15 @@ class AIStatus(Enum):
     ERROR = auto()
     INACTIVE = auto()
     HISTORY_CLEARED = auto()
+    # Specific error types can be added if needed for UI differentiation
     CONTENT_BLOCKED = auto()
     RATE_LIMIT = auto()
     CONNECTION_ERROR = auto()
     AUTHENTICATION_ERROR = auto()
 
 class ChatbotWorker(QObject):
-    # ... (ChatbotWorker class definition remains the same) ...
     responseReady = pyqtSignal(str, bool)
-    errorOccurred = pyqtSignal(AIStatus, str) 
+    errorOccurred = pyqtSignal(AIStatus, str) # Emits (AIStatus Enum for error type, error_string)
     statusUpdate = pyqtSignal(AIStatus, str)
 
     def __init__(self, api_key, model_name="gemini-1.5-flash-latest", parent=None):
@@ -73,6 +72,7 @@ class ChatbotWorker(QObject):
                 logger.info(f"Gemini client initialized for model {self.model_name}.")
             except Exception as e:
                 self.client = None
+                # error_msg = f"Failed to initialize Gemini client: {e}" # No direct emit from here
                 logger.error(f"Failed to initialize Gemini client: {e}", exc_info=True)
         else:
             self.client = None
@@ -88,7 +88,7 @@ class ChatbotWorker(QObject):
             self.statusUpdate.emit(AIStatus.API_KEY_REQUIRED, "Status: API Key cleared. AI Assistant inactive.")
         elif self.client:
              self.statusUpdate.emit(AIStatus.READY, "Status: API Key set and AI Assistant ready.")
-        else: 
+        else: # Failed to initialize client with new key
             self.errorOccurred.emit(AIStatus.API_KEY_ERROR, "Failed to initialize Gemini client with the new API key.")
             self.statusUpdate.emit(AIStatus.API_KEY_ERROR, "Status: API Key Error.")
 
@@ -273,9 +273,9 @@ class ChatbotWorker(QObject):
             ai_response_content = ""
             if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
                 ai_response_content = response.candidates[0].content.parts[0].text
-            elif hasattr(response, 'text'): # Fallback if structure is slightly different
+            elif hasattr(response, 'text'):
                 ai_response_content = response.text
-            else: # Handle cases where response might be empty or blocked
+            else:
                 feedback = response.prompt_feedback if hasattr(response, 'prompt_feedback') else "No feedback."
                 finish_reason = response.candidates[0].finish_reason if response.candidates else "Unknown reason."
                 error_msg = f"Gemini response was empty or blocked. Finish Reason: {finish_reason}. Feedback: {feedback}"
@@ -290,7 +290,6 @@ class ChatbotWorker(QObject):
                 self._current_processing_had_error = True
                 self.statusUpdate.emit(AIStatus.ERROR, f"Status: Error - {error_msg[:50]}...")
                 return
-
 
             self.conversation_history.append({"role": "user", "parts": [{"text": user_message}]})
             self.conversation_history.append({"role": "model", "parts": [{"text": ai_response_content}]})
@@ -323,7 +322,7 @@ class ChatbotWorker(QObject):
             self.errorOccurred.emit(AIStatus.ERROR, err_str)
             self.statusUpdate.emit(AIStatus.ERROR, f"Status: API Error - {type(e).__name__}.")
             self._current_processing_had_error = True
-        except (genai.types.BlockedPromptException, genai.types.StopCandidateException) as e: # Added specific Gemini exceptions
+        except (genai.types.BlockedPromptException, genai.types.StopCandidateException) as e:
             error_msg = f"Gemini content generation blocked or stopped: {e}"
             logger.error("WORKER_PROCESS: %s", error_msg, exc_info=True)
             self.errorOccurred.emit(AIStatus.CONTENT_BLOCKED, error_msg)
@@ -351,7 +350,7 @@ class ChatbotWorker(QObject):
         self._is_stopped = True
 
 
-class AIChatUIManager(QObject): # This is the class we are modifying
+class AIChatUIManager(QObject):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.mw = main_window
@@ -361,7 +360,7 @@ class AIChatUIManager(QObject): # This is the class we are modifying
         self.ai_chat_send_button: QPushButton = None
         self.ai_chat_status_label: QLabel = None
         self.original_send_button_icon: QIcon = None
-        # self.thinking_spinner_movie: QMovie | None = None # Keep for future use
+        self.thinking_spinner_movie: QMovie | None = None # Keep for future use
 
         self._connect_actions_to_manager_slots()
         self._connect_ai_chatbot_signals()
@@ -438,6 +437,7 @@ class AIChatUIManager(QObject): # This is the class we are modifying
             can_send_message = True
         elif status_enum == AIStatus.HISTORY_CLEARED:
             self.ai_chat_status_label.setStyleSheet(f"{base_style} color: {COLOR_TEXT_SECONDARY}; background-color: {QColor(COLOR_BACKGROUND_MEDIUM).lighter(105).name()};")
+            # Determine if ready after history clear based on manager's actual current state
             if self.mw.ai_chatbot_manager and self.mw.ai_chatbot_manager.get_current_ai_status() == AIStatus.READY:
                  can_send_message = True
         else:
@@ -460,89 +460,19 @@ class AIChatUIManager(QObject): # This is the class we are modifying
         if hasattr(self.mw, 'ask_ai_to_generate_fsm_action'):
             self.mw.ask_ai_to_generate_fsm_action.setEnabled(can_send_message)
 
-    # --- Start of Enhanced Methods ---
-    def _format_code_block(self, code_content: str, language: str = "") -> str:
+    def _format_code_block(self, code_content: str) -> str:
+        # ... (implementation remains the same) ...
         bg_color = COLOR_BACKGROUND_EDITOR_DARK
         text_color = COLOR_TEXT_EDITOR_DARK_PRIMARY
         border_color = QColor(bg_color).lighter(130).name()
-        lang_display = f"<span style='color: {COLOR_TEXT_SECONDARY}; font-size: 7pt; margin-bottom: 3px; display: block;'>{html.escape(language)}</span>" if language else ""
 
         escaped_code = html.escape(code_content)
-        # Added slightly more padding and margin for code blocks
-        return (f'<div style="margin: 8px 0; padding: 10px; background-color:{bg_color}; color:{text_color}; '
+        return (f'<div style="margin: 5px 0; padding: 8px; background-color:{bg_color}; color:{text_color}; '
                 f'border:1px solid {border_color}; border-radius:4px; font-family: Consolas, monospace; white-space:pre-wrap; overflow-x:auto;">'
-                f'{lang_display}'
                 f'{escaped_code}</div>')
 
-    def _markdown_to_html_basic(self, text_part: str) -> str:
-        # Process inline code `text` first
-        text_part = re.sub(r'`(.*?)`', r'_TEMP_INLINE_CODE_START_\1_TEMP_INLINE_CODE_END_', text_part, flags=re.DOTALL)
-
-        # Process bold **text** or __text__
-        text_part = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text_part, flags=re.DOTALL)
-        text_part = re.sub(r'__(.*?)__', r'<strong>\1</strong>', text_part, flags=re.DOTALL)
-        
-        # Process italics *text* or _text_ (more careful regex for single asterisks/underscores)
-        text_part = re.sub(r'(?<![a-zA-Z0-9])\*([^* \n](?:[^*]*[^* \n])?)\*(?![a-zA-Z0-9])', r'<em>\1</em>', text_part)
-        text_part = re.sub(r'(?<![a-zA-Z0-9])_([^_ \n](?:[^_]*[^_ \n])?)_(?![a-zA-Z0-9])', r'<em>\1</em>', text_part)
-        
-        # Basic unordered lists (simple one-level for now)
-        # Convert lines starting with * or - to <li> items
-        list_item_pattern = re.compile(r'^\s*[\-\*+]\s+(.*)', flags=re.MULTILINE)
-        list_items_html = []
-        in_list = False
-        processed_text_parts_for_list = []
-        last_list_match_end = 0
-
-        for line in text_part.splitlines(keepends=True):
-            match = list_item_pattern.match(line)
-            if match:
-                if not in_list:
-                    # Append text before the list starts
-                    processed_text_parts_for_list.append(text_part[last_list_match_end:match.start()])
-                    processed_text_parts_for_list.append("<ul>")
-                    in_list = True
-                list_items_html.append(f"<li>{match.group(1).strip()}</li>")
-            else:
-                if in_list:
-                    processed_text_parts_for_list.append("".join(list_items_html))
-                    processed_text_parts_for_list.append("</ul>")
-                    list_items_html = []
-                    in_list = False
-                # This line is not part of a list, store its original start relative to the current "text_part"
-                # For simplicity, we'll just append the line if it's not a list item after handling a list
-                if not list_item_pattern.match(line) and not list_items_html: # if we are not accumulating list items
-                     processed_text_parts_for_list.append(text_part[last_list_match_end if not processed_text_parts_for_list else 0 : text_part.find(line) + len(line)])
-                     last_list_match_end = text_part.find(line) + len(line)
-
-
-        if in_list: # Close any open list at the end
-            processed_text_parts_for_list.append("".join(list_items_html))
-            processed_text_parts_for_list.append("</ul>")
-        
-        # Append any remaining text after the last list
-        if last_list_match_end < len(text_part) and not list_items_html and not in_list :
-             processed_text_parts_for_list.append(text_part[last_list_match_end:])
-
-        if processed_text_parts_for_list and any("<ul>" in s for s in processed_text_parts_for_list):
-            text_part = "".join(processed_text_parts_for_list)
-        
-        # Escape remaining HTML special characters AFTER markdown processing but before re-inserting HTML tags
-        text_part_escaped = html.escape(text_part).replace("\n", "<br>")
-
-        # Re-insert already processed HTML tags (strong, em, ul, li)
-        text_part_escaped = text_part_escaped.replace(html.escape("<strong>"), "<strong>").replace(html.escape("</strong>"), "</strong>")
-        text_part_escaped = text_part_escaped.replace(html.escape("<em>"), "<em>").replace(html.escape("</em>"), "</em>")
-        text_part_escaped = text_part_escaped.replace(html.escape("<ul>"), "<ul>").replace(html.escape("</ul>"), "</ul>")
-        text_part_escaped = text_part_escaped.replace(html.escape("<li>"), "<li>").replace(html.escape("</li>"), "</li>")
-        
-        # Re-insert inline code tags with styling
-        inline_code_style = f"background-color:{QColor(COLOR_BACKGROUND_MEDIUM).lighter(105).name()}; color:{COLOR_ACCENT_PRIMARY}; padding:1px 4px; border-radius:3px; font-family:Consolas,monospace; font-size: 0.9em;"
-        text_part_escaped = text_part_escaped.replace(html.escape("_TEMP_INLINE_CODE_START_"), f"<code style='{inline_code_style}'>").replace(html.escape("_TEMP_INLINE_CODE_END_"), "</code>")
-        
-        return text_part_escaped
-
     def _append_to_chat_display(self, sender: str, message: str):
+        # ... (implementation remains the same) ...
         if not self.ai_chat_display: return
         timestamp = QTime.currentTime().toString('hh:mm:ss')
 
@@ -560,23 +490,53 @@ class AIChatUIManager(QObject): # This is the class we are modifying
         sender_name_html = sender_name_raw if sender in ["System Error"] else html.escape(sender)
 
         processed_message_html_parts = []
-        # Regex to find ```lang\ncode\n``` or ```\ncode\n```
         code_block_regex = re.compile(r'```([a-zA-Z0-9_+#.-]*)\s*\n(.*?)\n```', flags=re.DOTALL | re.MULTILINE)
         last_index = 0
 
         for match in code_block_regex.finditer(message):
             text_before = message[last_index:match.start()]
             if text_before:
-                processed_message_html_parts.append(self._markdown_to_html_basic(text_before))
+                part_html = text_before
+                part_html = part_html.replace("<strong>", "_एसटीआरओएनजी_एसटीएआरटि_").replace("</strong>", "_एसटीआरओएनजी_ईएनडी_")
+                part_html = part_html.replace("<em>", "_ईएम_एसटीएआरटि_").replace("</em>", "_ईएम_ईएनडी_")
+                part_html = part_html.replace("<code>", "_सीओडीई_आईएनएलआईएनई_एसटीएआरटि_").replace("</code>", "_सीओडीई_आईएनएलआईएनई_ईएनडी_")
 
-            language = match.group(1).strip()
+                part_html = re.sub(r'\*\*(.*?)\*\*', r'_एसटीआरओएनजी_एसटीएआरटि_\1_एसटीआरओएनजी_ईएनडी_', part_html, flags=re.DOTALL)
+                part_html = re.sub(r'(?<![*\w])\*([^* \n][^*]*?)\*(?![*\w])', r'_ईएम_एसटीएआरटि_\1_ईएम_ईएनडी_', part_html, flags=re.DOTALL)
+                part_html = re.sub(r'`(.*?)`', r'_सीओडीई_आईएनएलआईएनई_एसटीएआरटि_\1_सीओडीई_आईएनएलआईएनई_ईएनडी_', part_html, flags=re.DOTALL)
+
+                part_html_escaped = html.escape(part_html).replace("\n", "<br>")
+
+                part_html_escaped = part_html_escaped.replace(html.escape("_एसटीआरओएनजी_एसटीएआरटि_"), "<strong>").replace(html.escape("_एसटीआरओएनजी_ईएनडी_"), "</strong>")
+                part_html_escaped = part_html_escaped.replace(html.escape("_ईएम_एसटीएआरटि_"), "<em>").replace(html.escape("_ईएम_ईएनडी_"), "</em>")
+                inline_code_style = "background-color:#E0E0E0; color:#3F51B5; padding:1px 4px; border-radius:3px; font-family:Consolas,monospace;"
+                part_html_escaped = part_html_escaped.replace(html.escape("_सीओडीई_आईएनएलआईएनई_एसटीएआरटि_"), f"<code style='{inline_code_style}'>").replace(html.escape("_सीओडीई_आईएनएलआईएनई_ईएनडी_"), "</code>")
+
+                processed_message_html_parts.append(part_html_escaped)
+
             code_content = match.group(2).strip('\n')
-            processed_message_html_parts.append(self._format_code_block(code_content, language))
+            processed_message_html_parts.append(self._format_code_block(code_content))
             last_index = match.end()
 
         text_after = message[last_index:]
         if text_after:
-            processed_message_html_parts.append(self._markdown_to_html_basic(text_after))
+            part_html = text_after
+            part_html = part_html.replace("<strong>", "_एसटीआरओएनजी_एसटीएआरटि_").replace("</strong>", "_एसटीआरओएनजी_ईएनडी_")
+            part_html = part_html.replace("<em>", "_ईएम_एसटीएआरटि_").replace("</em>", "_ईएम_ईएनडी_")
+            part_html = part_html.replace("<code>", "_सीओडीई_आईएनएलआईएनई_एसटीएआरटि_").replace("</code>", "_सीओडीई_आईएनएलआईएनई_ईएनडी_")
+
+            part_html = re.sub(r'\*\*(.*?)\*\*', r'_एसटीआरओएनजी_एसटीएआरटि_\1_एसटीआरओएनजी_ईएनडी_', part_html, flags=re.DOTALL)
+            part_html = re.sub(r'(?<![*\w])\*([^* \n][^*]*?)\*(?![*\w])', r'_ईएम_एसटीएआरटि_\1_ईएम_ईएनडी_', part_html, flags=re.DOTALL)
+            part_html = re.sub(r'`(.*?)`', r'_सीओडीई_आईएनएलआईएनई_एसटीएआरटि_\1_सीओडीई_आईएनएलआईएनई_ईएनडी_', part_html, flags=re.DOTALL)
+
+            part_html_escaped = html.escape(part_html).replace("\n", "<br>")
+
+            part_html_escaped = part_html_escaped.replace(html.escape("_एसटीआरओएनजी_एसटीएआरटि_"), "<strong>").replace(html.escape("_एसटीआरओएनजी_ईएनडी_"), "</strong>")
+            part_html_escaped = part_html_escaped.replace(html.escape("_ईएम_एसटीएआरटि_"), "<em>").replace(html.escape("_ईएम_ईएनडी_"), "</em>")
+            inline_code_style = "background-color:#E0E0E0; color:#3F51B5; padding:1px 4px; border-radius:3px; font-family:Consolas,monospace;"
+            part_html_escaped = part_html_escaped.replace(html.escape("_सीओडीई_आईएनएलआईएनई_एसटीएआरटि_"), f"<code style='{inline_code_style}'>").replace(html.escape("_सीओडीई_आईएनएलआईएनई_ईएनडी_"), "</code>")
+
+            processed_message_html_parts.append(part_html_escaped)
 
         final_message_html = "".join(processed_message_html_parts)
 
@@ -584,21 +544,21 @@ class AIChatUIManager(QObject): # This is the class we are modifying
         if sender == "System Error": bg_msg_color = QColor(COLOR_ACCENT_ERROR).lighter(180).name()
         elif sender == "System": bg_msg_color = QColor(COLOR_BACKGROUND_MEDIUM).lighter(105).name()
 
-        html_to_append = (f"<div style='margin-bottom: 12px; padding: 8px 10px; border-left: 4px solid {sender_color_str}; background-color: {bg_msg_color}; border-radius: 5px;'>"
-                          f"<div style='margin-bottom: 4px;'>"
-                          f"<strong style='color:{sender_color_str}; font-size: 9pt;'>{sender_name_html}</strong>"
-                          f"<span style='font-size:7.5pt; color:{COLOR_TEXT_SECONDARY}; margin-left: 8px;'>[{timestamp}]</span> "
-                          f"</div>"
-                          f"<div style='padding-left: 2px; line-height:1.45; font-size: 9pt;'>{final_message_html}</div></div>")
+        html_to_append = (f"<div style='margin-bottom: 10px; padding: 5px; border-left: 3px solid {sender_color_str}; background-color: {bg_msg_color}; border-radius: 3px;'>"
+                          f"<span style='font-size:8pt; color:{COLOR_TEXT_SECONDARY};'>[{timestamp}]</span> "
+                          f"<strong style='color:{sender_color_str};'>{sender_name_html}:</strong>"
+                          f"<div style='margin-top: 4px; padding-left: 2px; line-height:1.4;'>{final_message_html}</div></div>")
 
         self.ai_chat_display.append(html_to_append)
         self.ai_chat_display.ensureCursorVisible()
-    # --- End of Enhanced Methods ---
 
     @pyqtSlot(AIStatus, str) # Corrected signature
-    def handle_ai_error(self, error_status_enum: AIStatus, error_message: str): # Error type added
+    def handle_ai_error(self, error_status_enum: AIStatus, error_message: str):
         self._append_to_chat_display("System Error", error_message)
         logger.error("AIChatUI: AI Chatbot Error (%s): %s", error_status_enum.name, error_message)
+        # The status display update (e.g., "Status: API Key Error") will be handled
+        # by the statusUpdate signal from AIChatbotManager, which should also emit
+        # an appropriate AIStatus enum for errors.
 
     @pyqtSlot(dict, str)
     def handle_fsm_data_from_ai(self, fsm_data: dict, source_message: str):
@@ -627,12 +587,14 @@ class AIChatUIManager(QObject): # This is the class we are modifying
 
         clear_current = (clicked_button == clear_btn)
         self.mw._add_fsm_data_to_scene(fsm_data, clear_current_diagram=clear_current, original_user_prompt=source_message)
+        # Worker's finally block should now set status to READY.
         logger.info("AIChatUI: FSM data from AI processed and added to scene.")
 
     @pyqtSlot(str)
     def handle_plain_ai_response(self, ai_message: str):
         logger.info("AIChatUI: Received plain AI response.")
         self._append_to_chat_display("AI", ai_message)
+        # Status update (to READY) should come from the worker's finally block.
 
     @pyqtSlot()
     def on_send_ai_chat_message(self):
@@ -643,8 +605,9 @@ class AIChatUIManager(QObject): # This is the class we are modifying
         if self.mw.ai_chatbot_manager:
             self.mw.ai_chatbot_manager.send_message(message)
         else:
+            # This case should ideally not happen if UI elements are correctly disabled
             err_msg = "AI Chatbot Manager not initialized. Cannot send message."
-            self.handle_ai_error(AIStatus.ERROR, err_msg) # Pass AIStatus.ERROR
+            self.handle_ai_error(AIStatus.ERROR, err_msg)
             self.update_status_display(AIStatus.ERROR, f"Status: Error - {err_msg}")
 
 
@@ -658,7 +621,7 @@ class AIChatUIManager(QObject): # This is the class we are modifying
                 self.mw.ai_chatbot_manager.generate_fsm_from_description(description)
                 self._append_to_chat_display("You", f"Generate an FSM: {description}")
             else:
-                self.handle_ai_error(AIStatus.ERROR, "AI Chatbot Manager not initialized.") # Pass AIStatus.ERROR
+                self.handle_ai_error(AIStatus.ERROR, "AI Chatbot Manager not initialized.")
         elif ok: QMessageBox.warning(self.mw, "Empty Description", "Please provide a description for the FSM.")
 
     @pyqtSlot()
@@ -701,12 +664,11 @@ class AIChatUIManager(QObject): # This is the class we are modifying
             else:
                 logger.info("AIChatUI: User cancelled clearing chat history.")
         else:
-            self.handle_ai_error(AIStatus.ERROR, "AI Chatbot Manager not initialized.") # Pass AIStatus.ERROR
+            self.handle_ai_error(AIStatus.ERROR, "AI Chatbot Manager not initialized.")
 
 class AIChatbotManager(QObject):
-    # ... (AIChatbotManager class definition remains the same) ...
     statusUpdate = pyqtSignal(AIStatus, str)
-    errorOccurred = pyqtSignal(AIStatus, str) 
+    errorOccurred = pyqtSignal(AIStatus, str) # Emits (AIStatus Enum for error type, error_string)
     fsmDataReceived = pyqtSignal(dict, str)
     plainResponseReady = pyqtSignal(str)
 
@@ -725,9 +687,12 @@ class AIChatbotManager(QObject):
         self.statusUpdate.emit(new_status_enum, status_text)
         logger.debug(f"MGR_STATUS_UPDATE: Enum={new_status_enum.name}, Text='{status_text}'")
 
+    # Slot to receive error string from worker and re-emit with AIStatus
     @pyqtSlot(AIStatus, str)
     def _handle_worker_error_with_status(self, error_status: AIStatus, error_message: str):
         logger.error(f"MGR_WORKER_ERROR (Status: {error_status.name}): {error_message}")
+        # The worker's statusUpdate will also set the overall status_label
+        # This errorOccurred is for potentially more detailed logging or specific error dialogs if needed.
         self.errorOccurred.emit(error_status, error_message)
 
 
@@ -754,7 +719,7 @@ class AIChatbotManager(QObject):
             logger.debug("MGR_CLEANUP: Disconnecting signals and scheduling old worker for deletion.")
             try: self.chatbot_worker.responseReady.disconnect(self._handle_worker_response)
             except (TypeError, RuntimeError): pass
-            try: self.chatbot_worker.errorOccurred.disconnect(self._handle_worker_error_with_status) 
+            try: self.chatbot_worker.errorOccurred.disconnect(self._handle_worker_error_with_status) # Changed connection
             except (TypeError, RuntimeError): pass
             try: self.chatbot_worker.statusUpdate.disconnect(self._update_current_ai_status)
             except (TypeError, RuntimeError): pass
@@ -782,6 +747,7 @@ class AIChatbotManager(QObject):
         elif self.chatbot_worker and self.api_key and self.chatbot_thread and self.chatbot_thread.isRunning():
              QMetaObject.invokeMethod(self.chatbot_worker, "set_api_key_slot", Qt.QueuedConnection,
                                       Q_ARG(str, self.api_key))
+             # Worker's set_api_key_slot will handle emitting new status (READY or API_KEY_ERROR)
         elif not self.api_key:
             self._update_current_ai_status(AIStatus.API_KEY_REQUIRED, "Status: Gemini API Key required.")
 
@@ -802,7 +768,7 @@ class AIChatbotManager(QObject):
         self.chatbot_worker.moveToThread(self.chatbot_thread)
 
         self.chatbot_worker.responseReady.connect(self._handle_worker_response)
-        self.chatbot_worker.errorOccurred.connect(self._handle_worker_error_with_status) 
+        self.chatbot_worker.errorOccurred.connect(self._handle_worker_error_with_status) # Connect to new slot
         self.chatbot_worker.statusUpdate.connect(self._update_current_ai_status)
 
         self.chatbot_thread.start()
@@ -835,6 +801,7 @@ class AIChatbotManager(QObject):
                     logger.info("MGR_HANDLE_WORKER_RESPONSE: Parsed FSM JSON successfully. Emitting fsmDataReceived.")
                     source_desc = self.last_fsm_request_description or "AI Generated FSM"
                     self.fsmDataReceived.emit(fsm_data, source_desc)
+                    # Worker's finally block will set status to READY if no error
                     return
                 else:
                     err_msg = "AI returned JSON, but it's not a valid FSM structure. Displaying as text."
@@ -849,6 +816,7 @@ class AIChatbotManager(QObject):
 
         logger.debug("MGR_HANDLE_WORKER_RESPONSE: Emitting plainResponseReady.")
         self.plainResponseReady.emit(ai_response_content)
+        # Worker's finally block should set to Ready if no error.
 
 
     def _prepare_and_send_to_worker(self, user_message_text: str, is_fsm_gen_specific: bool = False):
@@ -908,6 +876,7 @@ class AIChatbotManager(QObject):
                                      Q_ARG(str, user_message_text),
                                      Q_ARG(bool, is_fsm_gen_specific))
             logger.debug("MGR_PREP_SEND: Methods queued for worker.")
+            # Worker will emit THINKING status
         else:
             logger.error("MGR_PREP_SEND: Chatbot worker is None, cannot queue methods.")
             err_msg = "AI Assistant encountered an internal error (worker missing). Please try restarting AI features."
@@ -925,6 +894,7 @@ class AIChatbotManager(QObject):
         if self.chatbot_worker and self.chatbot_thread and self.chatbot_thread.isRunning():
             QMetaObject.invokeMethod(self.chatbot_worker, "clear_history_slot", Qt.QueuedConnection)
             logger.debug("MGR: clear_history invoked on worker.")
+            # Worker will emit AIStatus.HISTORY_CLEARED
         else:
             if not self.api_key:
                 self._update_current_ai_status(AIStatus.API_KEY_REQUIRED, "Status: API Key required. Chat inactive.")
@@ -952,12 +922,12 @@ class AIChatbotManager(QObject):
             if not self.chatbot_thread or not self.chatbot_thread.isRunning():
                 logger.info("MGR_NET_STATUS: Network online, API key present, attempting worker setup.")
                 self._setup_worker()
-            else: # Thread is running
-                if self.chatbot_worker and self.chatbot_worker.client: # Worker and client initialized
+            else:
+                if self.chatbot_worker and self.chatbot_worker.client:
                     self._update_current_ai_status(AIStatus.READY, "Status: Online and Ready.")
-                elif self.chatbot_worker and not self.chatbot_worker.client: # Worker exists but client failed (e.g. bad key after init)
+                elif self.chatbot_worker and not self.chatbot_worker.client:
                     self._update_current_ai_status(AIStatus.API_KEY_ERROR, "Status: Online, API Key Error.")
-                else: # Thread running but worker might not be fully ready (should be caught by initializing)
+                else:
                     self._update_current_ai_status(AIStatus.INITIALIZING, "Status: Online, Initializing...")
-        else: # Offline
+        else:
             self._update_current_ai_status(AIStatus.OFFLINE, "Status: Offline. Gemini AI features unavailable.")

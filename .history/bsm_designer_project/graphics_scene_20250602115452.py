@@ -15,18 +15,20 @@ from PyQt5.QtGui import QWheelEvent,QMouseEvent, QDrag, QDropEvent, QPixmap
 from PyQt5.QtGui import QKeyEvent, QKeySequence, QCursor, QPainter, QColor, QPen, QBrush, QTransform
 from PyQt5.QtCore import Qt, QRectF, QPointF, QLineF, pyqtSignal, QPoint, QMarginsF, QEvent, QMimeData, QTimer
 # In main.py, near the top
-
+from graphics_scene import DiagramScene, ZoomableView, MIME_TYPE_BSM_TEMPLATE # <--- ADD IT HERE
 from utils import get_standard_icon
 
 from config import (
     COLOR_BACKGROUND_LIGHT, COLOR_GRID_MINOR, COLOR_GRID_MAJOR, COLOR_ACCENT_PRIMARY,
     COLOR_ITEM_STATE_DEFAULT_BG, COLOR_ITEM_TRANSITION_DEFAULT, COLOR_ITEM_COMMENT_BG,
-    DEFAULT_EXECUTION_ENV, COLOR_BORDER_LIGHT, COLOR_BORDER_MEDIUM, # Added COLOR_BORDER_MEDIUM
-    MIME_TYPE_BSM_ITEMS,  # Make sure this is imported if used locally
-    MIME_TYPE_BSM_TEMPLATE # Import the constant
+    DEFAULT_EXECUTION_ENV, COLOR_BORDER_LIGHT, COLOR_BORDER_MEDIUM # Added COLOR_BORDER_MEDIUM
 )
 # bsm_designer_project/graphics_scene.py
-
+from config import (
+    # ... other color/config imports ...
+    MIME_TYPE_BSM_ITEMS,
+    MIME_TYPE_BSM_TEMPLATE # Import if it was locally defined
+)
 # Ensure correct relative import if graphics_items is in the same directory
 try:
     from .graphics_items import GraphicsStateItem, GraphicsTransitionItem, GraphicsCommentItem

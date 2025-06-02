@@ -122,29 +122,9 @@ MECHATRONICS_SNIPPETS = {
 FSM_TEMPLATES_BUILTIN = {
     "debounce": """
         {
-            "name": "Debounce Logic (Built-in)",
-            "description": "A simple debounce pattern for an input signal.",
-            "icon_resource": ":/icons/debounce_icon.png",
-            "states": [
-                {
-                    "name": "Unstable", "x": 50, "y": 50, "width": 120, "height": 60,
-                    "description": "Input is currently unstable or bouncing."
-                },
-                {
-                    "name": "Waiting", "x": 250, "y": 50, "width": 120, "height": 60,
-                    "entry_action": "start_debounce_timer()"
-                },
-                {
-                    "name": "Stable", "x": 450, "y": 50, "width": 120, "height": 60,
-                    "description": "Input is considered stable."
-                }
-            ],
-            "transitions": [
-                {"source": "Unstable", "target": "Waiting", "event": "input_change"},
-                {"source": "Waiting", "target": "Stable", "event": "debounce_timer_expired"},
-                {"source": "Waiting", "target": "Unstable", "event": "input_change_while_waiting", "control_offset_y": 40},
-                {"source": "Stable", "target": "Unstable", "event": "input_goes_unstable_again", "control_offset_y": -40}
-            ]
+            "name": "Debounce Logic",
+            "description": "A simple debounce pattern for an input signal. Assumes 'start_debounce_timer()' is defined by the user for the 'Waiting' state's entry action.", 
+            "icon_resource": ":/icons/debounce_icon.png"
         }
     """,
     "blinker": """
@@ -245,7 +225,7 @@ STYLE_SHEET_GLOBAL = f"""
         border-top-right-radius: 3px;
     }}
     QDockWidget {{
-        border: 1px solid {COLOR_BORDER_LIGHT};
+        border: 1px solid {COLOR_BORDER_LIGHT}; 
     }}
     QDockWidget::close-button, QDockWidget::float-button {{
         subcontrol-position: top right;
@@ -314,7 +294,7 @@ STYLE_SHEET_GLOBAL = f"""
         padding: 5px;
     }}
     QMenu::item {{
-        padding: 7px 30px 7px 30px;
+        padding: 7px 30px 7px 30px; 
         border-radius: 3px;
     }}
     QMenu::item:selected {{
@@ -333,24 +313,24 @@ STYLE_SHEET_GLOBAL = f"""
         background-color: {COLOR_BACKGROUND_MEDIUM};
         color: {COLOR_TEXT_PRIMARY};
         border-top: 1px solid {COLOR_BORDER_LIGHT};
-        padding: 3px 5px;
+        padding: 3px 5px; 
     }}
     QStatusBar::item {{
-        border: none;
+        border: none; 
         margin: 0 3px;
     }}
     QLabel#StatusLabel, QLabel#MatlabStatusLabel, QLabel#PySimStatusLabel, QLabel#AIChatStatusLabel, QLabel#InternetStatusLabel,
-    QMainWindow QLabel[objectName$="StatusLabel"],
-    QLabel#ZoomStatusLabel
+    QMainWindow QLabel[objectName$="StatusLabel"], 
+    QLabel#ZoomStatusLabel 
     {{
          padding: 2px 6px;
          font-size: {APP_FONT_SIZE_SMALL};
-         border-radius: 3px;
+         border-radius: 3px; 
     }}
     QLabel#CpuStatusLabel, QLabel#RamStatusLabel, QLabel#GpuStatusLabel {{
         font-size: {APP_FONT_SIZE_SMALL};
         padding: 2px 6px;
-        min-width: 70px;
+        min-width: 70px; 
         border: 1px solid {COLOR_BORDER_LIGHT};
         background-color: {COLOR_BACKGROUND_APP};
         border-radius: 3px;
@@ -366,13 +346,13 @@ STYLE_SHEET_GLOBAL = f"""
         background-color: {COLOR_BACKGROUND_DIALOG};
         color: {COLOR_TEXT_PRIMARY};
         border: 1px solid {COLOR_BORDER_MEDIUM};
-        border-radius: 4px;
+        border-radius: 4px; 
         padding: 6px 8px;
         font-size: {APP_FONT_SIZE_STANDARD};
     }}
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QComboBox:focus {{
         border: 1px solid {COLOR_ACCENT_PRIMARY};
-        outline: none;
+        outline: none; 
     }}
     QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QSpinBox:disabled, QComboBox:disabled {{
         background-color: {COLOR_BACKGROUND_MEDIUM};
@@ -382,37 +362,37 @@ STYLE_SHEET_GLOBAL = f"""
     QComboBox::drop-down {{
         subcontrol-origin: padding;
         subcontrol-position: top right;
-        width: 25px;
+        width: 25px; 
         border-left-width: 1px;
         border-left-color: {COLOR_BORDER_MEDIUM};
         border-left-style: solid;
         border-top-right-radius: 3px;
         border-bottom-right-radius: 3px;
-        background-color: {COLOR_BACKGROUND_LIGHT};
+        background-color: {COLOR_BACKGROUND_LIGHT}; 
     }}
     QComboBox::drop-down:hover {{
         background-color: {COLOR_ACCENT_PRIMARY_LIGHT};
     }}
     QComboBox::down-arrow {{
-         image: url(:/icons/arrow_down.png);
-         width: 12px; height:12px;
+         image: url(:/icons/arrow_down.png); 
+         width: 12px; height:12px; 
     }}
-    QComboBox QAbstractItemView {{
+    QComboBox QAbstractItemView {{ 
         background-color: {COLOR_BACKGROUND_DIALOG};
         border: 1px solid {COLOR_BORDER_MEDIUM};
         selection-background-color: {COLOR_ACCENT_PRIMARY};
         selection-color: {COLOR_TEXT_ON_ACCENT};
-        border-radius: 3px;
+        border-radius: 3px; 
         padding: 2px;
     }}
     QPushButton {{
-        background-color: #EFEFEF;
+        background-color: #EFEFEF; 
         color: {COLOR_TEXT_PRIMARY};
         border: 1px solid {COLOR_BORDER_MEDIUM};
-        padding: 7px 18px;
+        padding: 7px 18px; 
         border-radius: 4px;
         min-height: 22px;
-        font-weight: 500;
+        font-weight: 500; 
     }}
     QPushButton:hover {{
         background-color: {QColor(COLOR_BACKGROUND_MEDIUM).lighter(105).name()};
@@ -422,7 +402,7 @@ STYLE_SHEET_GLOBAL = f"""
         background-color: {COLOR_BACKGROUND_DARK};
     }}
     QPushButton:disabled {{
-        background-color: {COLOR_BACKGROUND_LIGHT};
+        background-color: {COLOR_BACKGROUND_LIGHT}; 
         color: {COLOR_TEXT_SECONDARY};
         border-color: {COLOR_BORDER_LIGHT};
     }}
@@ -430,7 +410,7 @@ STYLE_SHEET_GLOBAL = f"""
         min-width: 90px;
     }}
     QDialogButtonBox QPushButton[text="OK"], QDialogButtonBox QPushButton[text="Apply & Close"],
-    QDialogButtonBox QPushButton[text="Save"]
+    QDialogButtonBox QPushButton[text="Save"] 
     {{
         background-color: {COLOR_ACCENT_PRIMARY};
         color: {COLOR_TEXT_ON_ACCENT};
@@ -443,7 +423,7 @@ STYLE_SHEET_GLOBAL = f"""
         background-color: {QColor(COLOR_ACCENT_PRIMARY).lighter(110).name()};
     }}
     QDialogButtonBox QPushButton[text="Cancel"], QDialogButtonBox QPushButton[text="Discard"],
-    QDialogButtonBox QPushButton[text="Close"]
+    QDialogButtonBox QPushButton[text="Close"] 
     {{
         background-color: {COLOR_BACKGROUND_MEDIUM};
         color: {COLOR_TEXT_PRIMARY};
@@ -455,25 +435,25 @@ STYLE_SHEET_GLOBAL = f"""
         background-color: {QColor(COLOR_BACKGROUND_MEDIUM).darker(110).name()};
     }}
     QGroupBox {{
-        background-color: transparent;
+        background-color: transparent; 
         border: 1px solid {COLOR_BORDER_LIGHT};
         border-radius: 5px;
-        margin-top: 12px;
+        margin-top: 12px; 
         padding: 12px 10px 10px 10px;
     }}
     QGroupBox::title {{
         subcontrol-origin: margin;
         subcontrol-position: top left;
-        padding: 0 10px;
+        padding: 0 10px; 
         left: 12px;
-        background-color: {COLOR_BACKGROUND_APP};
+        background-color: {COLOR_BACKGROUND_APP}; 
         color: {COLOR_ACCENT_PRIMARY};
         font-weight: bold;
         border-radius: 3px;
     }}
     QTabWidget::pane {{
         border: 1px solid {COLOR_BORDER_LIGHT};
-        border-top: none;
+        border-top: none; 
         border-bottom-left-radius: 4px;
         border-bottom-right-radius: 4px;
         background-color: {COLOR_BACKGROUND_DIALOG};
@@ -483,29 +463,29 @@ STYLE_SHEET_GLOBAL = f"""
         background: {COLOR_BACKGROUND_MEDIUM};
         color: {COLOR_TEXT_SECONDARY};
         border: 1px solid {COLOR_BORDER_LIGHT};
-        border-bottom-color: {COLOR_BACKGROUND_DIALOG};
+        border-bottom-color: {COLOR_BACKGROUND_DIALOG}; 
         border-top-left-radius: 4px;
         border-top-right-radius: 4px;
-        padding: 8px 18px;
+        padding: 8px 18px; 
         margin-right: 2px;
-        min-width: 80px;
+        min-width: 80px; 
     }}
     QTabBar::tab:selected {{
         background: {COLOR_BACKGROUND_DIALOG};
         color: {COLOR_TEXT_PRIMARY};
         font-weight: bold;
-        border-bottom-color: {COLOR_BACKGROUND_DIALOG};
+        border-bottom-color: {COLOR_BACKGROUND_DIALOG}; 
     }}
     QTabBar::tab:!selected:hover {{
         background: {COLOR_ACCENT_PRIMARY_LIGHT};
         color: {COLOR_TEXT_PRIMARY};
-        border-bottom-color: {COLOR_BORDER_LIGHT};
+        border-bottom-color: {COLOR_BORDER_LIGHT}; 
     }}
     QCheckBox {{
-        spacing: 10px;
+        spacing: 10px; 
     }}
     QCheckBox::indicator {{
-        width: 16px;
+        width: 16px; 
         height: 16px;
     }}
     QCheckBox::indicator:unchecked {{
@@ -520,7 +500,7 @@ STYLE_SHEET_GLOBAL = f"""
         border: 1px solid {QColor(COLOR_ACCENT_PRIMARY).darker(120).name()};
         border-radius: 3px;
         background-color: {COLOR_ACCENT_PRIMARY};
-        image: url(:/icons/check.png);
+        image: url(:/icons/check.png); 
     }}
     QCheckBox::indicator:checked:hover {{
         background-color: {QColor(COLOR_ACCENT_PRIMARY).lighter(110).name()};
@@ -531,28 +511,28 @@ STYLE_SHEET_GLOBAL = f"""
          font-size: {APP_FONT_SIZE_EDITOR};
          background-color: {COLOR_BACKGROUND_EDITOR_DARK};
          color: {COLOR_TEXT_EDITOR_DARK_PRIMARY};
-         border: 1px solid {COLOR_BORDER_DARK};
+         border: 1px solid {COLOR_BORDER_DARK}; 
          border-radius: 4px;
          padding: 8px;
-         selection-background-color: {QColor(COLOR_ACCENT_PRIMARY).darker(110).name()};
+         selection-background-color: {QColor(COLOR_ACCENT_PRIMARY).darker(110).name()}; 
          selection-color: {COLOR_TEXT_ON_ACCENT};
     }}
     QScrollBar:vertical {{
          border: 1px solid {COLOR_BORDER_LIGHT};
          background: {COLOR_BACKGROUND_LIGHT};
-         width: 16px;
+         width: 16px; 
          margin: 0px;
     }}
     QScrollBar::handle:vertical {{
-         background: {COLOR_BORDER_DARK};
-         min-height: 30px;
-         border-radius: 8px;
+         background: {COLOR_BORDER_DARK}; 
+         min-height: 30px; 
+         border-radius: 8px; 
     }}
     QScrollBar::handle:vertical:hover {{
          background: {QColor(COLOR_BORDER_DARK).lighter(120).name()};
     }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-         height: 0px;
+         height: 0px; 
          background: transparent;
     }}
     QScrollBar:horizontal {{
@@ -577,13 +557,13 @@ STYLE_SHEET_GLOBAL = f"""
     QTextEdit#LogOutputWidget QScrollBar:vertical, QTextEdit#PySimActionLog QScrollBar:vertical,
     QTextEdit#AIChatDisplay QScrollBar:vertical, QPlainTextEdit#ActionCodeEditor QScrollBar:vertical,
     QTextEdit#IDEOutputConsole QScrollBar:vertical, QPlainTextEdit#StandaloneCodeEditor QScrollBar:vertical {{
-         border: 1px solid {COLOR_BORDER_DARK};
-         background: {QColor(COLOR_BACKGROUND_EDITOR_DARK).lighter(110).name()};
+         border: 1px solid {COLOR_BORDER_DARK}; 
+         background: {QColor(COLOR_BACKGROUND_EDITOR_DARK).lighter(110).name()}; 
     }}
     QTextEdit#LogOutputWidget QScrollBar::handle:vertical, QTextEdit#PySimActionLog QScrollBar::handle:vertical,
     QTextEdit#AIChatDisplay QScrollBar::handle:vertical, QPlainTextEdit#ActionCodeEditor QScrollBar::handle:vertical,
     QTextEdit#IDEOutputConsole QScrollBar::handle:vertical, QPlainTextEdit#StandaloneCodeEditor QScrollBar::handle:vertical {{
-         background: {COLOR_TEXT_EDITOR_DARK_SECONDARY};
+         background: {COLOR_TEXT_EDITOR_DARK_SECONDARY}; 
     }}
     QTextEdit#LogOutputWidget QScrollBar::handle:vertical:hover, QTextEdit#PySimActionLog QScrollBar::handle:vertical:hover,
     QTextEdit#AIChatDisplay QScrollBar::handle:vertical:hover, QPlainTextEdit#ActionCodeEditor QScrollBar::handle:vertical:hover,
@@ -593,11 +573,11 @@ STYLE_SHEET_GLOBAL = f"""
 
     QPushButton#SnippetButton {{
         background-color: {COLOR_ACCENT_SECONDARY};
-        color: {COLOR_TEXT_PRIMARY};
+        color: {COLOR_TEXT_PRIMARY}; 
         border: 1px solid {QColor(COLOR_ACCENT_SECONDARY).darker(130).name()};
         font-weight: normal;
-        padding: 5px 10px;
-        min-height: 0;
+        padding: 5px 10px; 
+        min-height: 0; 
     }}
     QPushButton#SnippetButton:hover {{
         background-color: {QColor(COLOR_ACCENT_SECONDARY).lighter(110).name()};
@@ -611,69 +591,69 @@ STYLE_SHEET_GLOBAL = f"""
     QProgressBar {{
         border: 1px solid {COLOR_BORDER_MEDIUM}; border-radius: 4px;
         background-color: {COLOR_BACKGROUND_LIGHT}; text-align: center;
-        color: {COLOR_TEXT_PRIMARY}; height: 14px;
+        color: {COLOR_TEXT_PRIMARY}; height: 14px; 
     }}
     QProgressBar::chunk {{
         background-color: {COLOR_ACCENT_PRIMARY}; border-radius: 3px;
     }}
     QPushButton#DraggableToolButton {{
         background-color: {COLOR_DRAGGABLE_BUTTON_BG}; color: {COLOR_TEXT_PRIMARY};
-        border: 1px solid {COLOR_DRAGGABLE_BUTTON_BORDER};
-        padding: 8px;
-        text-align: left;
+        border: 1px solid {COLOR_DRAGGABLE_BUTTON_BORDER}; 
+        padding: 8px; 
+        text-align: left; 
         font-weight: 500;
-        min-height: 38px;
+        min-height: 38px; 
     }}
     QPushButton#DraggableToolButton:hover {{
         background-color: {COLOR_DRAGGABLE_BUTTON_HOVER_BG}; border-color: {COLOR_DRAGGABLE_BUTTON_HOVER_BORDER};
     }}
     QPushButton#DraggableToolButton:pressed {{ background-color: {COLOR_DRAGGABLE_BUTTON_PRESSED_BG}; }}
-
-    #PropertiesDock QLabel#PropertiesLabel {{
-        padding: 8px; background-color: {COLOR_BACKGROUND_DIALOG};
-        border: 1px solid {COLOR_BORDER_LIGHT}; border-radius: 4px;
-        font-size: {APP_FONT_SIZE_STANDARD};
+    
+    #PropertiesDock QLabel#PropertiesLabel {{ 
+        padding: 8px; background-color: {COLOR_BACKGROUND_DIALOG}; 
+        border: 1px solid {COLOR_BORDER_LIGHT}; border-radius: 4px; 
+        font-size: {APP_FONT_SIZE_STANDARD}; 
     }}
-    #PropertiesDock QPushButton {{
+    #PropertiesDock QPushButton {{ 
         background-color: {COLOR_ACCENT_PRIMARY}; color: {COLOR_TEXT_ON_ACCENT};
-        font-weight:bold;
+        font-weight:bold; 
     }}
     #PropertiesDock QPushButton:hover {{ background-color: {QColor(COLOR_ACCENT_PRIMARY).lighter(110).name()}; }}
 
-    QDockWidget#ToolsDock QToolButton {{
+    QDockWidget#ToolsDock QToolButton {{ 
         padding: 8px 10px; text-align: left;
-        min-height: 38px;
-        font-weight: 500;
+        min-height: 38px; 
+        font-weight: 500; 
     }}
-
+    
     QDockWidget#PySimDock QPushButton {{
-        padding: 6px 12px;
+        padding: 6px 12px; 
     }}
     QDockWidget#PySimDock QPushButton:disabled {{
         background-color: {COLOR_BACKGROUND_MEDIUM};
         color: {COLOR_TEXT_SECONDARY};
     }}
     QDockWidget#PySimDock QTableWidget {{
-        alternate-background-color: {COLOR_BACKGROUND_APP};
+        alternate-background-color: {COLOR_BACKGROUND_APP}; 
         gridline-color: {COLOR_BORDER_LIGHT};
         background-color: {COLOR_BACKGROUND_DIALOG};
     }}
      QDockWidget#PySimDock QHeaderView::section,
-     QTableWidget QHeaderView::section
+     QTableWidget QHeaderView::section 
      {{
         background-color: {COLOR_BACKGROUND_MEDIUM};
         padding: 6px;
         border: 1px solid {COLOR_BORDER_LIGHT};
-        border-bottom: 2px solid {COLOR_BORDER_DARK};
+        border-bottom: 2px solid {COLOR_BORDER_DARK}; 
         font-weight: bold;
     }}
-    QDockWidget#AIChatbotDock QPushButton#AIChatSendButton,
-    QDockWidget#PySimDock QPushButton[text="Trigger"]
+    QDockWidget#AIChatbotDock QPushButton#AIChatSendButton, 
+    QDockWidget#PySimDock QPushButton[text="Trigger"] 
     {{
         background-color: {COLOR_ACCENT_PRIMARY}; color: {COLOR_TEXT_ON_ACCENT};
         font-weight: bold;
-        padding: 6px;
-        min-width: 0;
+        padding: 6px; 
+        min-width: 0; 
     }}
     QDockWidget#AIChatbotDock QPushButton#AIChatSendButton:hover,
     QDockWidget#PySimDock QPushButton[text="Trigger"]:hover
@@ -687,11 +667,11 @@ STYLE_SHEET_GLOBAL = f"""
         color: {COLOR_TEXT_SECONDARY};
         border-color: {COLOR_BORDER_LIGHT};
     }}
-    QLineEdit#AIChatInput, QLineEdit#PySimEventNameEdit
+    QLineEdit#AIChatInput, QLineEdit#PySimEventNameEdit 
     {{
-        padding: 7px 9px;
+        padding: 7px 9px; 
     }}
-
+    
 """
 # Note: Icon resource paths like 'url(:/icons/arrow_down.png)' assume 'resources_rc.py'
 # is correctly generated and imported, and the .qrc file has these aliases.

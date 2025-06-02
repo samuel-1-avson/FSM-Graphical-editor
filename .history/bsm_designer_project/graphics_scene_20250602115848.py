@@ -15,7 +15,7 @@ from PyQt5.QtGui import QWheelEvent,QMouseEvent, QDrag, QDropEvent, QPixmap
 from PyQt5.QtGui import QKeyEvent, QKeySequence, QCursor, QPainter, QColor, QPen, QBrush, QTransform
 from PyQt5.QtCore import Qt, QRectF, QPointF, QLineF, pyqtSignal, QPoint, QMarginsF, QEvent, QMimeData, QTimer
 # In main.py, near the top
-
+from graphics_scene import DiagramScene, ZoomableView, MIME_TYPE_BSM_TEMPLATE # <--- ADD IT HERE
 from utils import get_standard_icon
 
 from config import (

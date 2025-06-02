@@ -18,74 +18,36 @@ class AddItemCommand(QUndoCommand):
     def __init__(self, scene, item, description="Add Item"):
         super().__init__(description)
         self.scene = scene
-        self.item_instance = item
+        self.item_instance = item # Store the actual QGraphicsItem instance
 
+        # Store data needed to reconstruct the item if it's fully removed and re-added
+        # (e.g., if transitions need re-linking by name upon undo/redo cycles if states are also removed/re-added)
         self.item_data = item.get_data()
-        self.item_data['_type'] = item.type()
-        item_name_for_log = "UnknownItem" # Default
-
-        if isinstance(item, GraphicsStateItem):
-            self.item_data['_type'] = GraphicsStateItem.Type # Ensure correct type for reconstruction
-            item_name_for_log = item.text_label
-        elif isinstance(item, GraphicsTransitionItem):
-            self.item_data['_type'] = GraphicsTransitionItem.Type
+        self.item_data['_type'] = item.type() # Store item type for reconstruction
+        if isinstance(item, GraphicsTransitionItem):
             self.item_data['_start_name'] = item.start_item.text_label if item.start_item else None
             self.item_data['_end_name'] = item.end_item.text_label if item.end_item else None
-            event_str = item.event_str or "Unnamed Event"
-            item_name_for_log = f"Transition ({event_str} from '{self.item_data['_start_name']}' to '{self.item_data['_end_name']}')"
-        elif isinstance(item, GraphicsCommentItem):
-            self.item_data['_type'] = GraphicsCommentItem.Type
-            plain_text = item.toPlainText()
-            item_name_for_log = plain_text[:20] + "..." if len(plain_text) > 23 else plain_text
-        
-        logger.debug(f"AddItemCommand: Initialized for item '{item_name_for_log}' of type {type(item).__name__}. Desc: {description}")
-
-
-    def _get_display_name_for_log(self, item_instance_or_data):
-        # Helper to get a display name for logging, works with instance or stored data
-        is_instance = isinstance(item_instance_or_data, QGraphicsItem)
-        
-        item_type = item_instance_or_data.type() if is_instance else item_instance_or_data.get('_type')
-        
-        if item_type == GraphicsStateItem.Type:
-            name = item_instance_or_data.text_label if is_instance else item_instance_or_data.get('name')
-            return name or "StateItem"
-        elif item_type == GraphicsTransitionItem.Type:
-            event = item_instance_or_data.event_str if is_instance else item_instance_or_data.get('event')
-            start_name = ""
-            end_name = ""
-            if is_instance:
-                start_name = item_instance_or_data.start_item.text_label if item_instance_or_data.start_item else "UnknownSrc"
-                end_name = item_instance_or_data.end_item.text_label if item_instance_or_data.end_item else "UnknownTgt"
-            else: # From data
-                start_name = item_instance_or_data.get('_start_name', "UnknownSrc")
-                end_name = item_instance_or_data.get('_end_name', "UnknownTgt")
-            return f"Transition ({event or 'unnamed'} from '{start_name}' to '{end_name}')"
-        elif item_type == GraphicsCommentItem.Type:
-            plain_text = item_instance_or_data.toPlainText() if is_instance else item_instance_or_data.get('text')
-            return (plain_text[:20] + "..." if plain_text and len(plain_text) > 23 else plain_text) or "CommentItem"
-        return "UnknownItem"
 
     def redo(self):
-        display_name = self._get_display_name_for_log(self.item_instance)
-
-        if self.item_instance.scene() is None:
+        if self.item_instance.scene() is None: # Only add if not already in scene
             self.scene.addItem(self.item_instance)
-            logger.debug(f"AddItemCommand: Redo - Added item '{display_name}' to scene.")
-        else:
-            logger.debug(f"AddItemCommand: Redo - Item '{display_name}' was already in scene. Not re-adding.")
+            logger.debug(f"AddItemCommand: Redo - Added item {self.item_data.get('name', self.item_data.get('text', 'Unknown'))} to scene.")
 
+        # Connect signals for GraphicsStateItem if applicable
         if isinstance(self.item_instance, GraphicsStateItem) and self.scene.parent_window:
             if hasattr(self.scene.parent_window, 'connect_state_item_signals'):
                 self.scene.parent_window.connect_state_item_signals(self.item_instance)
-                logger.debug(f"AddItemCommand: Redo - Connected signals for state '{self.item_instance.text_label}'.")
+                logger.debug(f"AddItemCommand: Redo - Connected signals for state {self.item_instance.text_label}.")
 
+        # If it's a transition, ensure its start/end items are correctly linked by re-finding them
         if isinstance(self.item_instance, GraphicsTransitionItem):
             start_node = self.scene.get_state_by_name(self.item_data['_start_name'])
             end_node = self.scene.get_state_by_name(self.item_data['_end_name'])
             if start_node and end_node:
                 self.item_instance.start_item = start_node
                 self.item_instance.end_item = end_node
+                # Re-apply properties mainly for control point offset if it was not set by constructor
+                # or if other visual aspects need refreshing.
                 self.item_instance.set_properties(
                     event_str=self.item_data['event'],
                     condition_str=self.item_data['condition'],
@@ -96,31 +58,26 @@ class AddItemCommand(QUndoCommand):
                     offset=QPointF(self.item_data['control_offset_x'], self.item_data['control_offset_y'])
                 )
                 self.item_instance.update_path()
-                logger.debug(f"AddItemCommand: Redo - Relinked transition '{display_name}'")
+                logger.debug(f"AddItemCommand: Redo - Relinked transition '{self.item_data.get('event', 'Unnamed Trans')}'")
             else:
-                log_msg = f"Error (Redo Add Transition): Could not link transition. State(s) missing for '{display_name}'. Source: '{self.item_data['_start_name']}', Target: '{self.item_data['_end_name']}'."
+                log_msg = f"Error (Redo Add Transition): Could not link transition. State(s) missing for '{self.item_data.get('event', 'Unnamed Transition')}'. Source: '{self.item_data['_start_name']}', Target: '{self.item_data['_end_name']}'."
                 logger.error(f"AddItemCommand: {log_msg}")
-                if hasattr(self.scene, 'log_function'):
+                if hasattr(self.scene, 'log_function'): # Check if scene has a log_function
                     self.scene.log_function(log_msg, level="ERROR")
+
 
         self.scene.clearSelection()
         self.item_instance.setSelected(True)
         self.scene.set_dirty(True)
-        self.scene.scene_content_changed_for_find.emit()
-        self.scene.run_all_validations(f"AddItemCommand_Redo_{display_name}")
+        self.scene.scene_content_changed_for_find.emit() # Notify FindItemDialog
 
     def undo(self):
-        display_name = self._get_display_name_for_log(self.item_instance)
-
-        if self.item_instance.scene() == self.scene:
+        # Store position if needed for redoing accurately, though item_instance should retain it
+        if self.item_instance.scene() == self.scene: # Check if it's still in the scene
             self.scene.removeItem(self.item_instance)
-            logger.debug(f"AddItemCommand: Undo - Removed item '{display_name}' from scene.")
-        else:
-            logger.debug(f"AddItemCommand: Undo - Item '{display_name}' was not in the scene to remove.")
-
+            logger.debug(f"AddItemCommand: Undo - Removed item {self.item_data.get('name', self.item_data.get('text', 'Unknown'))} from scene.")
         self.scene.set_dirty(True)
-        self.scene.scene_content_changed_for_find.emit()
-        self.scene.run_all_validations(f"AddItemCommand_Undo_{display_name}")
+        self.scene.scene_content_changed_for_find.emit() # Notify FindItemDialog
 
 
 class RemoveItemsCommand(QUndoCommand):

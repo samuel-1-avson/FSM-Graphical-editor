@@ -17,9 +17,9 @@ import logging
 import threading
 
 from PyQt5.QtCore import (
-    Qt, QTime, QTimer, QPointF, QMetaObject, QFile, QTemporaryFile, QDir,
-    QIODevice, QFileInfo, QEvent, QSize, QUrl, pyqtSignal, pyqtSlot,
-    QThread, QPoint, QMimeData, QObject, QSaveFile # Added QSaveFile
+    Qt, QTime, QTimer, QPointF, QMetaObject, QFile, QTemporaryFile, QDir, 
+    QIODevice, QFileInfo, QEvent, QSize, QUrl, pyqtSignal, pyqtSlot, 
+    QThread, QPoint, QMimeData, QObject, QSaveFile # <--- ADD QSaveFile HERE
 )
 from PyQt5.QtGui import (
     QIcon, QBrush, QColor, QFont, QPen, QPixmap, QDrag, QPainter, QPainterPath,
@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
     QGraphicsSceneHoverEvent, QGraphicsTextItem, QGraphicsDropShadowEffect,
     QHeaderView, QTableWidget, QTableWidgetItem, QAbstractItemView
 )
+# bsm_designer_project/main.py
 
 import pygraphviz as pgv # For AI FSM layout
 import psutil
@@ -55,7 +56,7 @@ from graphics_items import GraphicsStateItem, GraphicsTransitionItem, GraphicsCo
 from undo_commands import AddItemCommand, MoveItemsCommand, RemoveItemsCommand, EditItemPropertiesCommand
 from code_editor import CodeEditor
 from fsm_simulator import FSMSimulator, FSMError
-from ai_chatbot import AIChatbotManager, AIStatus, AIChatUIManager
+from ai_chatbot import AIChatbotManager, AIStatus, AIChatUIManager # AIChatUIManager is in ai_chatbot.py
 from dialogs import (MatlabSettingsDialog, FindItemDialog)
 from matlab_integration import MatlabConnection
 from config import (
@@ -71,11 +72,11 @@ from config import (
     APP_FONT_FAMILY, APP_FONT_SIZE_EDITOR,
     COLOR_BACKGROUND_EDITOR_DARK, COLOR_TEXT_EDITOR_DARK_PRIMARY, COLOR_BORDER_DARK,
     COLOR_ACCENT_SUCCESS, COLOR_ACCENT_ERROR, COLOR_BACKGROUND_MEDIUM,
-    FSM_TEMPLATES_BUILTIN,MIME_TYPE_BSM_TEMPLATE
+    FSM_TEMPLATES_BUILTIN,MIME_TYPE_BSM_TEMPLATE # Add this import
 )
 from utils import get_standard_icon
 from ui_py_simulation_manager import PySimulationUIManager
-from c_code_generator import generate_c_code_files
+from c_code_generator import generate_c_code_files # Added for C Code Gen
 
 
 try:
@@ -260,11 +261,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} - Untitled [*]")
 
-        # Initialize attributes that are immediately needed or might be checked
         self.current_file_path = None
         self.last_generated_model_path = None
         self.undo_stack = QUndoStack(self)
-        self.scene = DiagramScene(self.undo_stack, self) # scene needed by view
+        self.scene = DiagramScene(self.undo_stack, self)
 
         self.matlab_connection = MatlabConnection()
         self.ai_chatbot_manager = AIChatbotManager(self)
@@ -280,35 +280,31 @@ class MainWindow(QMainWindow):
         self.ide_editor_is_dirty = False
 
         self.find_item_dialog: FindItemDialog | None = None
-        
-        # --- Call init_ui() BEFORE creating UI managers that might be used by it ---
-        # --- or by methods called at the end of __init__ like on_new_file ---
-        self.init_ui() # This creates docks, including log_output and problems_dock
 
-        # --- Setup logging AFTER log_output widget is created in _create_docks (called by init_ui) ---
+        self.init_ui() # This calls _create_actions which refers to on_new_file etc.
+
         try:
             if not hasattr(self, 'log_output') or not self.log_output:
-                # This fallback should ideally not be needed if init_ui structure is correct
-                self.log_output = QTextEdit() 
+                self.log_output = QTextEdit() # Fallback if log_dock isn't created yet
                 logger.warning("MainWindow: log_output fallback used before logging setup.")
             setup_global_logging(self.log_output)
             logger.info("Main window initialized and logging configured.")
+            if not hasattr(self, 'problems_list_widget') or not self.problems_list_widget:
+                logger.error("Problems dock list widget not available. Deferring update.")
+                # You could potentially queue the update if this happens often,
+                # or ensure _create_docks is called before any signal can trigger this.
+                return 
         except Exception as e:
             print(f"ERROR: Failed to run setup_global_logging: {e}. UI logs might not work.")
             if not logging.getLogger().hasHandlers():
                  logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-        # --- Create UI Managers AFTER basic UI elements (like docks) are set up ---
         self.py_sim_ui_manager = PySimulationUIManager(self)
         self.ai_chat_ui_manager = AIChatUIManager(self)
 
-        # --- Populate dynamic docks (which use the UI managers) ---
         self._populate_dynamic_docks()
-        
-        # --- Connect signals (some might involve UI managers) ---
         self._connect_signals()
 
-        # --- Initialize status systems ---
         self._internet_connected: bool | None = None
         self.internet_check_timer = QTimer(self)
         self.resource_monitor_worker: ResourceMonitorWorker | None = None
@@ -319,10 +315,8 @@ class MainWindow(QMainWindow):
         self._set_status_label_object_names()
         self._update_ui_element_states()
 
-        # --- Call on_new_file LAST, after everything else is set up ---
-        self.on_new_file(silent=True)
+        self.on_new_file(silent=True) # This must be callable after init_ui
 
-        # --- Final AI status update ---
         if self.ai_chat_ui_manager and self.ai_chatbot_manager:
             QTimer.singleShot(250, lambda: self.ai_chatbot_manager.set_online_status(
                 self._internet_connected if self._internet_connected is not None else False
@@ -352,11 +346,14 @@ class MainWindow(QMainWindow):
         if self.py_sim_ui_manager:
             self.py_sim_ui_manager.simulationStateChanged.connect(self._handle_py_sim_state_changed_by_manager)
             self.py_sim_ui_manager.requestGlobalUIEnable.connect(self._handle_py_sim_global_ui_enable_by_manager)
+        # AIChatUIManager connects its signals internally in its __init__ (already done by the time this is called)
 
         # Matlab signals
         self.matlab_connection.connectionStatusChanged.connect(self._update_matlab_status_display)
         self.matlab_connection.simulationFinished.connect(self._handle_matlab_modelgen_or_sim_finished)
         self.matlab_connection.codeGenerationFinished.connect(self._handle_matlab_codegen_finished)
+
+        # Undo stack signals are connected in _create_actions where actions are created
 
     def _set_status_label_object_names(self):
         """Helper method to set object names for status labels."""
@@ -368,6 +365,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'py_sim_status_label'): self.py_sim_status_label.setObjectName("PySimStatusLabel")
         if hasattr(self, 'matlab_status_label'): self.matlab_status_label.setObjectName("MatlabStatusLabel")
         if hasattr(self, 'internet_status_label'): self.internet_status_label.setObjectName("InternetStatusLabel")
+        # AIChatStatusLabel is named within AIChatUIManager.create_dock_widget_contents,
+        # which is called by _populate_dynamic_docks before this.
 
     def _update_ui_element_states(self):
         """Helper method to update initial states of various UI elements."""
@@ -386,7 +385,7 @@ class MainWindow(QMainWindow):
         self._create_actions()
         self._create_menus()
         self._create_toolbars()
-        self._create_docks() # self.log_output and self.problems_list_widget are created here
+        self._create_docks() # self.log_output is created here
         self._create_status_bar()
         self._update_save_actions_enable_state()
         self._update_matlab_actions_enabled_state()
@@ -403,11 +402,13 @@ class MainWindow(QMainWindow):
         if self.ai_chat_ui_manager and hasattr(self, 'ai_chatbot_dock') and self.ai_chatbot_dock:
             ai_chat_contents_widget = self.ai_chat_ui_manager.create_dock_widget_contents()
             self.ai_chatbot_dock.setWidget(ai_chat_contents_widget)
+            # Set object name for the status label within the AI Chat UI manager's created widget
             if hasattr(self.ai_chat_ui_manager, 'ai_chat_status_label') and self.ai_chat_ui_manager.ai_chat_status_label:
                 self.ai_chat_ui_manager.ai_chat_status_label.setObjectName("AIChatStatusLabel")
         else:
             logger.error("Could not populate AI Chatbot Dock: manager or dock missing.")
 
+        # Tabify Docks (Ensure all docks exist before tabifying)
         docks_to_tabify = [
             (self.properties_dock, self.ai_chatbot_dock),
             (self.ai_chatbot_dock, self.py_sim_dock),
@@ -447,7 +448,7 @@ class MainWindow(QMainWindow):
             statusTip="Save the current file with a new name", triggered=self.on_save_file_as
         )
         self.export_simulink_action = QAction(get_standard_icon(_safe_get_style_enum("SP_ArrowUp","SP_ArrowRight"), "->M"), "&Export to Simulink...", self, triggered=self.on_export_simulink)
-        self.generate_c_code_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "CGen"), "Generate &Basic C Code...", self, triggered=self.on_generate_c_code)
+        self.generate_c_code_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "CGen"), "Generate &Basic C Code...", self, triggered=self.on_generate_c_code) # New Action
         self.exit_action = QAction(get_standard_icon(QStyle.SP_DialogCloseButton, "Exit"), "E&xit", self, shortcut=QKeySequence.Quit, statusTip="Exit the application", triggered=self.close)
 
         self.undo_action = self.undo_stack.createUndoAction(self, "&Undo")
@@ -477,7 +478,7 @@ class MainWindow(QMainWindow):
         self.select_mode_action.setChecked(True)
 
         self.run_simulation_action = QAction(get_standard_icon(QStyle.SP_MediaPlay, "Run"), "&Run Simulation (MATLAB)...", self, triggered=self.on_run_simulation)
-        self.generate_matlab_code_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "CdeM"), "Generate &Code (C/C++ via MATLAB)...", self, triggered=self.on_generate_matlab_code)
+        self.generate_matlab_code_action = QAction(get_standard_icon(QStyle.SP_DialogSaveButton, "CdeM"), "Generate &Code (C/C++ via MATLAB)...", self, triggered=self.on_generate_matlab_code) # Renamed
         self.matlab_settings_action = QAction(get_standard_icon(QStyle.SP_ComputerIcon, "Cfg"), "&MATLAB Settings...", self, triggered=self.on_matlab_settings)
 
         self.start_py_sim_action = QAction(get_standard_icon(QStyle.SP_MediaPlay, "Py▶"), "&Start Python Simulation", self, statusTip="Start internal FSM simulation")
@@ -548,11 +549,12 @@ class MainWindow(QMainWindow):
         menu_bar = self.menuBar(); file_menu = menu_bar.addMenu("&File"); file_menu.addAction(self.new_action); file_menu.addAction(self.open_action)
         example_menu = file_menu.addMenu(get_standard_icon(QStyle.SP_FileDialogContentsView, "Ex"), "Open E&xample"); self.open_example_traffic_action = example_menu.addAction("Traffic Light FSM", lambda: self._open_example_file("traffic_light.bsm")); self.open_example_toggle_action = example_menu.addAction("Simple Toggle FSM", lambda: self._open_example_file("simple_toggle.bsm"))
         
-        export_menu = file_menu.addMenu("E&xport")
+        export_menu = file_menu.addMenu("E&xport") # New Export submenu
         export_menu.addAction(self.export_simulink_action)
-        export_menu.addAction(self.generate_c_code_action)
+        export_menu.addAction(self.generate_c_code_action) # Add C code generation here
 
         file_menu.addAction(self.save_action); file_menu.addAction(self.save_as_action); file_menu.addSeparator()
+        # file_menu.addAction(self.export_simulink_action); # Moved to Export submenu
         file_menu.addSeparator(); file_menu.addAction(self.exit_action)
         
         edit_menu = menu_bar.addMenu("&Edit"); edit_menu.addAction(self.undo_action); edit_menu.addAction(self.redo_action); edit_menu.addSeparator(); edit_menu.addAction(self.delete_action); edit_menu.addAction(self.select_all_action); edit_menu.addSeparator(); edit_menu.addAction(self.find_item_action); edit_menu.addSeparator()
@@ -579,15 +581,15 @@ class MainWindow(QMainWindow):
         edit_toolbar = self.addToolBar("Edit"); edit_toolbar.setObjectName("EditToolBar"); edit_toolbar.setIconSize(icon_size); edit_toolbar.setToolButtonStyle(tb_style); edit_toolbar.addAction(self.undo_action); edit_toolbar.addAction(self.redo_action); edit_toolbar.addSeparator(); edit_toolbar.addAction(self.delete_action); edit_toolbar.addAction(self.find_item_action)
         tools_tb = self.addToolBar("Interaction Tools"); tools_tb.setObjectName("ToolsToolBar"); tools_tb.setIconSize(icon_size); tools_tb.setToolButtonStyle(tb_style); tools_tb.addAction(self.select_mode_action); tools_tb.addAction(self.add_state_mode_action); tools_tb.addAction(self.add_transition_mode_action); tools_tb.addAction(self.add_comment_mode_action)
         
-        code_gen_export_toolbar = self.addToolBar("Code Generation & Export")
+        code_gen_export_toolbar = self.addToolBar("Code Generation & Export") # New Toolbar
         code_gen_export_toolbar.setObjectName("CodeGenExportToolBar")
         code_gen_export_toolbar.setIconSize(icon_size)
         code_gen_export_toolbar.setToolButtonStyle(tb_style)
-        code_gen_export_toolbar.addAction(self.export_simulink_action)
-        code_gen_export_toolbar.addAction(self.generate_matlab_code_action)
-        code_gen_export_toolbar.addAction(self.generate_c_code_action)
+        code_gen_export_toolbar.addAction(self.export_simulink_action) # Moved from Sim Toolbar
+        code_gen_export_toolbar.addAction(self.generate_matlab_code_action) # Moved from Sim Toolbar (and renamed)
+        code_gen_export_toolbar.addAction(self.generate_c_code_action) # New
         
-        sim_toolbar = self.addToolBar("Simulation Tools"); sim_toolbar.setObjectName("SimulationToolBar"); sim_toolbar.setIconSize(icon_size); sim_toolbar.setToolButtonStyle(tb_style); sim_toolbar.addAction(self.start_py_sim_action); sim_toolbar.addAction(self.stop_py_sim_action); sim_toolbar.addAction(self.reset_py_sim_action); sim_toolbar.addSeparator(); sim_toolbar.addAction(self.run_simulation_action)
+        sim_toolbar = self.addToolBar("Simulation Tools"); sim_toolbar.setObjectName("SimulationToolBar"); sim_toolbar.setIconSize(icon_size); sim_toolbar.setToolButtonStyle(tb_style); sim_toolbar.addAction(self.start_py_sim_action); sim_toolbar.addAction(self.stop_py_sim_action); sim_toolbar.addAction(self.reset_py_sim_action); sim_toolbar.addSeparator(); sim_toolbar.addAction(self.run_simulation_action) # Removed generate_matlab_code_action from here
         
         view_toolbar = self.addToolBar("View Tools"); view_toolbar.setObjectName("ViewToolBar"); view_toolbar.setIconSize(icon_size); view_toolbar.setToolButtonStyle(tb_style); view_toolbar.addAction(self.zoom_in_action); view_toolbar.addAction(self.zoom_out_action); view_toolbar.addAction(self.reset_zoom_action); view_toolbar.addSeparator(); view_toolbar.addAction(self.zoom_to_selection_action); view_toolbar.addAction(self.fit_diagram_action)
         align_toolbar = self.addToolBar("Alignment & Distribution"); align_toolbar.setObjectName("AlignDistributeToolBar"); align_toolbar.setIconSize(icon_size); align_toolbar.setToolButtonStyle(tb_style); align_toolbar.addAction(self.align_left_action); align_toolbar.addAction(self.align_center_h_action); align_toolbar.addAction(self.align_right_action); align_toolbar.addSeparator(); align_toolbar.addAction(self.align_top_action); align_toolbar.addAction(self.align_middle_v_action); align_toolbar.addAction(self.align_bottom_action); align_toolbar.addSeparator(); align_toolbar.addAction(self.distribute_h_action); align_toolbar.addAction(self.distribute_v_action)
@@ -668,6 +670,7 @@ class MainWindow(QMainWindow):
         self.resource_monitor_thread.started.connect(self.resource_monitor_worker.start_monitoring)
 
         self.resource_monitor_worker.finished_signal.connect(self.resource_monitor_thread.quit)
+        # Worker and thread deleteLater will be handled in closeEvent to ensure NVML shutdown
         self.resource_monitor_thread.start()
         logger.info("Resource monitor thread initialized and started.")
 
@@ -775,9 +778,17 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(list)
     def update_problems_dock(self, issues_with_items: list):
-        if not hasattr(self, 'problems_list_widget') or not self.problems_list_widget:
-            logger.error("Problems dock list widget not available. Deferring update.")
-            return
+        if not self.problems_list_widget:
+            logger.error("Problems dock list widget not initialized when update_problems_dock was called.")
+            # Defensive: try to recreate if dock exists but widget is None
+            if hasattr(self, 'problems_dock') and self.problems_dock and not self.problems_dock.widget():
+                logger.warning("Attempting to re-initialize problems_list_widget as dock widget was None.")
+                self.problems_list_widget = QListWidget()
+                self.problems_list_widget.itemDoubleClicked.connect(self.on_problem_item_double_clicked)
+                self.problems_dock.setWidget(self.problems_list_widget)
+            else:
+                logger.error("Cannot update problems dock, list widget or dock itself is missing.")
+                return
 
         self.problems_list_widget.clear()
         if issues_with_items:
@@ -921,6 +932,7 @@ class MainWindow(QMainWindow):
             logger.info("MW: View adjusted to AI generated items.")
         elif self.view and self.scene.sceneRect():
             self.view.centerOn(self.scene.sceneRect().center())
+
 
     @pyqtSlot()
     def on_matlab_settings(self):
@@ -1248,7 +1260,7 @@ class MainWindow(QMainWindow):
             if not self._prompt_ide_save_if_dirty():
                  return False
 
-        if hasattr(self, 'py_sim_ui_manager') and self.py_sim_ui_manager: # Check added
+        if self.py_sim_ui_manager:
             self.py_sim_ui_manager.on_stop_py_simulation(silent=True)
 
         self.scene.clear()
@@ -1257,7 +1269,7 @@ class MainWindow(QMainWindow):
         self.last_generated_model_path = None
         self.undo_stack.clear()
         self.scene.set_dirty(False)
-        self._update_window_title()
+        self._update_window_title() # This will now also update self.setWindowModified()
         self._update_undo_redo_actions_enable_state()
         self._update_save_actions_enable_state()
         if not silent:
@@ -1279,7 +1291,7 @@ class MainWindow(QMainWindow):
         if not self._prompt_ide_save_if_dirty():
             return
 
-        if hasattr(self, 'py_sim_ui_manager') and self.py_sim_ui_manager: # Check added
+        if self.py_sim_ui_manager:
             self.py_sim_ui_manager.on_stop_py_simulation(silent=True)
 
         start_dir = os.path.dirname(self.current_file_path) if self.current_file_path else QDir.homePath()
@@ -1291,6 +1303,7 @@ class MainWindow(QMainWindow):
                 self.last_generated_model_path = None
                 self.undo_stack.clear()
                 self.scene.set_dirty(False)
+                # self.setWindowModified(self.ide_editor_is_dirty) # Handled by _update_window_title
                 self._update_window_title()
                 self._update_undo_redo_actions_enable_state()
                 self._update_save_actions_enable_state()
@@ -1328,7 +1341,7 @@ class MainWindow(QMainWindow):
                 return False
 
             self.scene.clear()
-            self.scene.load_diagram_data(data) 
+            self.scene.load_diagram_data(data) # This now calls run_all_validations
 
             for item in self.scene.items():
                 if isinstance(item, GraphicsStateItem):
@@ -1401,6 +1414,7 @@ class MainWindow(QMainWindow):
             logging.info("Successfully saved diagram to: %s", file_path)
             if hasattr(self, 'status_label'): self.status_label.setText(f"Saved: {os.path.basename(file_path)}")
             self.scene.set_dirty(False)
+            # self.setWindowModified(self.ide_editor_is_dirty) # Handled by _update_window_title
             self._update_window_title()
             self._update_save_actions_enable_state()
             return True
@@ -1478,7 +1492,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def on_generate_c_code(self):
-        if not self.scene.items():
+        if not self.scene.items(): # Or a more specific check for states
             QMessageBox.information(self, "Empty Diagram", "Cannot generate code for an empty diagram.")
             return
 
@@ -1536,7 +1550,7 @@ class MainWindow(QMainWindow):
         self.matlab_connection.run_simulation(model_path, sim_time)
 
     @pyqtSlot()
-    def on_generate_matlab_code(self):
+    def on_generate_matlab_code(self): # Renamed from on_generate_code
         if not self.matlab_connection.connected:
             QMessageBox.warning(self, "MATLAB Not Connected", "Please configure MATLAB path in Settings.")
             return
@@ -1636,8 +1650,7 @@ class MainWindow(QMainWindow):
     def _open_example_file(self, filename: str):
         if not self._prompt_save_if_dirty():
             return
-        if hasattr(self, 'py_sim_ui_manager') and self.py_sim_ui_manager:
-            self.py_sim_ui_manager.on_stop_py_simulation(silent=True)
+        if self.py_sim_ui_manager: self.py_sim_ui_manager.on_stop_py_simulation(silent=True)
 
         example_path = self._get_bundled_file_path(filename, resource_prefix="examples")
         if example_path:
@@ -1703,7 +1716,7 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
 
-        if hasattr(self, 'py_sim_ui_manager') and self.py_sim_ui_manager: # Check added
+        if self.py_sim_ui_manager:
             self.py_sim_ui_manager.on_stop_py_simulation(silent=True)
 
         if self.internet_check_timer and self.internet_check_timer.isActive():
@@ -1726,9 +1739,10 @@ class MainWindow(QMainWindow):
             logger.debug("MW_CLOSE: Interruption requested on resource monitor thread.")
 
             if self.resource_monitor_worker:
+                # Ensure stop_monitoring is called reliably
                 if QThread.currentThread() != self.resource_monitor_thread:
                     QMetaObject.invokeMethod(self.resource_monitor_worker, "stop_monitoring", Qt.BlockingQueuedConnection)
-                else:
+                else: # Should not happen if worker is on its own thread and this is main thread
                     self.resource_monitor_worker.stop_monitoring()
                 logger.debug("MW_CLOSE: stop_monitoring slot invoked on resource worker.")
 
@@ -1746,7 +1760,7 @@ class MainWindow(QMainWindow):
             else:
                 logger.info("MW_CLOSE: Resource monitor thread stopped gracefully.")
 
-        elif self.resource_monitor_worker:
+        elif self.resource_monitor_worker: # Thread wasn't running, but worker object exists
             worker_ref_for_nvml_shutdown = self.resource_monitor_worker
             logger.info("MW_CLOSE: Resource monitor thread was not running, but worker instance exists.")
 
@@ -1754,9 +1768,9 @@ class MainWindow(QMainWindow):
              logger.info("MW_CLOSE: Shutting down NVML via worker reference.")
              worker_ref_for_nvml_shutdown._shutdown_nvml()
 
-        if self.resource_monitor_worker:
+        if self.resource_monitor_worker: # Schedule for deletion if still exists
             self.resource_monitor_worker.deleteLater()
-        if self.resource_monitor_thread:
+        if self.resource_monitor_thread: # Schedule for deletion if still exists
             self.resource_monitor_thread.deleteLater()
         self.resource_monitor_worker = None
         self.resource_monitor_thread = None
@@ -1881,7 +1895,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'stop_py_sim_action'): self.stop_py_sim_action.setEnabled(sim_can_be_controlled)
         if hasattr(self, 'reset_py_sim_action'): self.reset_py_sim_action.setEnabled(sim_can_be_controlled)
 
-        if hasattr(self, 'py_sim_ui_manager') and self.py_sim_ui_manager: # Check added
+        if self.py_sim_ui_manager:
             self.py_sim_ui_manager._update_internal_controls_enabled_state()
 
     @pyqtSlot(bool)
@@ -2355,8 +2369,9 @@ class MainWindow(QMainWindow):
     def connect_state_item_signals(self, state_item: GraphicsStateItem):
         if hasattr(state_item, 'signals') and hasattr(state_item.signals, 'textChangedViaInlineEdit'):
             try:
+                # Attempt to disconnect first to avoid multiple connections if called multiple times
                 state_item.signals.textChangedViaInlineEdit.disconnect(self._handle_state_renamed_inline)
-            except TypeError: 
+            except TypeError: # Raised if not connected
                 pass
             state_item.signals.textChangedViaInlineEdit.connect(self._handle_state_renamed_inline)
             logger.debug(f"Connected rename signal for state: {state_item.text_label}")
