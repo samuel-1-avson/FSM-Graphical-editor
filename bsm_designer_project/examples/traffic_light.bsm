@@ -1,0 +1,113 @@
+{
+    "states": [
+        {
+            "name": "Red",
+            "x": 100,
+            "y": 150,
+            "width": 120,
+            "height": 60,
+            "is_initial": true,
+            "is_final": false,
+            "color": "#EF5350",
+            "action_language": "Python (Generic Simulation)",
+            "entry_action": "print('Light is RED')",
+            "during_action": "",
+            "exit_action": "",
+            "description": "Traffic light is red. Stop.",
+            "is_superstate": false,
+            "sub_fsm_data": {
+                "states": [],
+                "transitions": [],
+                "comments": []
+            }
+        },
+        {
+            "name": "Yellow",
+            "x": 300,
+            "y": 150,
+            "width": 120,
+            "height": 60,
+            "is_initial": false,
+            "is_final": false,
+            "color": "#FFEE58",
+            "action_language": "Python (Generic Simulation)",
+            "entry_action": "print('Light is YELLOW')",
+            "during_action": "",
+            "exit_action": "",
+            "description": "Traffic light is yellow. Prepare to stop or proceed with caution.",
+            "is_superstate": false,
+            "sub_fsm_data": {
+                "states": [],
+                "transitions": [],
+                "comments": []
+            }
+        },
+        {
+            "name": "Green",
+            "x": 500,
+            "y": 150,
+            "width": 120,
+            "height": 60,
+            "is_initial": false,
+            "is_final": false,
+            "color": "#66BB6A",
+            "action_language": "Python (Generic Simulation)",
+            "entry_action": "print('Light is GREEN')",
+            "during_action": "",
+            "exit_action": "",
+            "description": "Traffic light is green. Go.",
+            "is_superstate": false,
+            "sub_fsm_data": {
+                "states": [],
+                "transitions": [],
+                "comments": []
+            }
+        }
+    ],
+    "transitions": [
+        {
+            "source": "Red",
+            "target": "Green",
+            "event": "timer_red_expired",
+            "condition": "",
+            "action_language": "Python (Generic Simulation)",
+            "action": "print('Transition: Red to Green')",
+            "color": "#00796B",
+            "description": "Timer for red light expires.",
+            "control_offset_x": 0,
+            "control_offset_y": -50
+        },
+        {
+            "source": "Green",
+            "target": "Yellow",
+            "event": "timer_green_expired",
+            "condition": "",
+            "action_language": "Python (Generic Simulation)",
+            "action": "print('Transition: Green to Yellow')",
+            "color": "#00796B",
+            "description": "Timer for green light expires.",
+            "control_offset_x": 0,
+            "control_offset_y": 0
+        },
+        {
+            "source": "Yellow",
+            "target": "Red",
+            "event": "timer_yellow_expired",
+            "condition": "",
+            "action_language": "Python (Generic Simulation)",
+            "action": "print('Transition: Yellow to Red')",
+            "color": "#00796B",
+            "description": "Timer for yellow light expires.",
+            "control_offset_x": 0,
+            "control_offset_y": 50
+        }
+    ],
+    "comments": [
+        {
+            "text": "A simple traffic light controller FSM example.",
+            "x": 250,
+            "y": 50,
+            "width": 200
+        }
+    ]
+}
