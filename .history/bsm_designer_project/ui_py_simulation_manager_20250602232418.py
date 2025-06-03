@@ -36,7 +36,7 @@ class PySimulationUIManager(QObject):
         self.py_sim_event_name_edit: QLineEdit = None
         self.py_sim_trigger_event_btn: QPushButton = None
         self.py_sim_current_state_label: QLabel = None
-        self.py_sim_current_tick_label: QLabel = None # New for tick display
+        self.py_sim_current_tick_label: QLabel = None # NEW
         self.py_sim_variables_table: QTableWidget = None
         self.py_sim_action_log_output: QTextEdit = None
         self._py_sim_currently_highlighted_item: GraphicsStateItem | None = None
@@ -93,7 +93,7 @@ class PySimulationUIManager(QObject):
             self.py_sim_reset_btn.setIcon(get_standard_icon(QStyle.SP_MediaSkipBackward, "Py«"))
             self.py_sim_reset_btn.clicked.connect(self.on_reset_py_simulation)
 
-        self.py_sim_step_btn = QPushButton("Step (Internal/Tick)") # Clarified Step button
+        self.py_sim_step_btn = QPushButton("Step")
         self.py_sim_step_btn.setIcon(get_standard_icon(QStyle.SP_MediaSeekForward, "Step"))
         self.py_sim_step_btn.clicked.connect(self.on_step_py_simulation)
 
@@ -109,24 +109,26 @@ class PySimulationUIManager(QObject):
         self.py_sim_event_name_edit = QLineEdit(); self.py_sim_event_name_edit.setPlaceholderText("Custom event name")
         event_layout.addWidget(self.py_sim_event_name_edit, 1)
         
-        self.py_sim_trigger_event_btn = QPushButton("Trigger Event") # Clarified button
-        self.py_sim_trigger_event_btn.setIcon(get_standard_icon(QStyle.SP_MediaPlay, "Trg")) # Keep icon as is
+        self.py_sim_trigger_event_btn = QPushButton("Trigger")
+        self.py_sim_trigger_event_btn.setIcon(get_standard_icon(QStyle.SP_MediaPlay, "Trg"))
         self.py_sim_trigger_event_btn.clicked.connect(self.on_trigger_py_event)
         event_layout.addWidget(self.py_sim_trigger_event_btn)
         event_group.setLayout(event_layout); py_sim_layout.addWidget(event_group)
 
-        state_group = QGroupBox("Current Status") # Renamed
-        state_layout = QVBoxLayout()
-        self.py_sim_current_state_label = QLabel("<i>Not Running</i>"); self.py_sim_current_state_label.setStyleSheet("font-size: 9pt; padding: 3px;")
+        state_group = QGroupBox("Current Status") # Renamed for clarity
+        state_layout = QVBoxLayout() # Changed to QVBoxLayout for tick label
+        self.py_sim_current_state_label = QLabel("<i>Not Running</i>")
+        self.py_sim_current_state_label.setStyleSheet("font-size: 9pt; padding: 3px;")
         state_layout.addWidget(self.py_sim_current_state_label)
 
         # --- NEW: Tick Display ---
         self.py_sim_current_tick_label = QLabel("Tick: 0")
-        self.py_sim_current_tick_label.setStyleSheet(f"font-size: {APP_FONT_SIZE_SMALL}; color: {COLOR_TEXT_SECONDARY}; padding: 2px 3px;")
+        self.py_sim_current_tick_label.setStyleSheet(f"font-size: {APP_FONT_SIZE_SMALL}; color: {COLOR_TEXT_SECONDARY}; padding: 2px 3px; margin-top: 2px;")
         state_layout.addWidget(self.py_sim_current_tick_label)
         # --- END NEW ---
 
         state_group.setLayout(state_layout); py_sim_layout.addWidget(state_group)
+
 
         variables_group = QGroupBox("Variables")
         variables_layout = QVBoxLayout()
@@ -237,7 +239,8 @@ class PySimulationUIManager(QObject):
             if self.py_sim_current_state_label:
                 self.py_sim_current_state_label.setText("<i>Not Running</i>")
                 self.py_sim_current_state_label.setStyleSheet(f"font-size: 9pt; padding: 3px; color: {COLOR_TEXT_SECONDARY}; background-color: {COLOR_BACKGROUND_MEDIUM}; border-radius:3px;")
-            if self.py_sim_current_tick_label: self.py_sim_current_tick_label.setText("Tick: 0") # Reset tick display
+            if self.py_sim_current_tick_label: # NEW
+                self.py_sim_current_tick_label.setText("Tick: 0")
 
             if self.py_sim_variables_table: self.py_sim_variables_table.setRowCount(0)
             self._highlight_sim_active_state(None)
@@ -285,12 +288,12 @@ class PySimulationUIManager(QObject):
             
             possible_events_set.update(self.mw.py_fsm_engine.get_possible_events_from_current_state())
             
-            possible_events = sorted(list(filter(None, possible_events_set))) # Filter out None or empty strings
+            possible_events = sorted(list(possible_events_set))
 
             if possible_events: self.py_sim_event_combo.addItems(possible_events)
             
             idx = self.py_sim_event_combo.findText(current_text)
-            self.py_sim_event_combo.setCurrentIndex(idx if idx != -1 else 0)
+            self.py_sim_event_combo.setCurrentIndex(idx if idx != -1 else (0 if not possible_events else self.py_sim_event_combo.count() - len(possible_events)))
         
         self._update_internal_controls_enabled_state()
 
@@ -303,16 +306,16 @@ class PySimulationUIManager(QObject):
         warning_color = QColor(COLOR_ACCENT_WARNING).darker(10).name() 
         highlight_color = COLOR_ACCENT_PRIMARY.name() if isinstance(COLOR_ACCENT_PRIMARY, QColor) else COLOR_ACCENT_PRIMARY
         success_color = QColor(COLOR_ACCENT_SUCCESS).darker(110).name()
+        tick_color = QColor(COLOR_TEXT_SECONDARY).lighter(110).name() # For tick prefix
 
         last_source_state, last_target_state, last_event = None, None, None
         for entry in reversed(log_entries): 
-            # Regex to match "[Tick X] After transition on 'EVENT' from 'SOURCE' to 'TARGET'"
-            match = re.search(r"\[Tick \d+\] After transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
+            match = re.search(r"After transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
             if match:
                 last_event, last_source_state, last_target_state = match.groups()
                 break 
             else: 
-                match_before = re.search(r"\[Tick \d+\] Before transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
+                match_before = re.search(r"Before transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
                 if match_before:
                     last_event, last_source_state, last_target_state = match_before.groups()
         
@@ -322,18 +325,16 @@ class PySimulationUIManager(QObject):
         for entry in log_entries:
             timestamp = QTime.currentTime().toString('hh:mm:ss.zzz')
             
-            # Extract tick if present
-            tick_str = ""
-            tick_match = re.match(r"(\[SUB\] )*\[Tick (\d+)\] (.*)", entry)
+            # Extract tick if present (from fsm_simulator's _log_action)
+            tick_info_str = ""
+            tick_match = re.match(r"(\[Tick \d+\]\s*)(.*)", entry)
             if tick_match:
-                sub_prefix = tick_match.group(1) or ""
-                tick_val = tick_match.group(2)
-                actual_entry_msg = tick_match.group(3)
-                tick_str = f"<span style='color:{QColor(COLOR_TEXT_SECONDARY).lighter(110).name()}; font-size:7pt;'>{sub_prefix}Tick {tick_val}</span> "
+                tick_info_str = f"<span style='color:{tick_color}; font-style:italic;'>{html.escape(tick_match.group(1))}</span>"
+                log_content_for_styling = tick_match.group(2)
             else:
-                actual_entry_msg = entry
+                log_content_for_styling = entry
 
-            cleaned_entry = html.escape(actual_entry_msg)
+            cleaned_entry = html.escape(log_content_for_styling)
             current_color = default_log_color
             style_tags = ("", "")
 
@@ -349,7 +350,7 @@ class PySimulationUIManager(QObject):
                 current_color = COLOR_TEXT_SECONDARY
             
             formatted_log_line = (f"<span style='color:{time_color}; font-size:7pt;'>[{timestamp}]</span> "
-                                  f"{tick_str}"
+                                  f"{tick_info_str}"
                                   f"<span style='color:{current_color};'>{style_tags[0]}{cleaned_entry}{style_tags[1]}</span>")
             self.py_sim_action_log_output.append(formatted_log_line)
         
@@ -390,9 +391,9 @@ class PySimulationUIManager(QObject):
             self._set_simulation_active_state(True) 
             if self.py_sim_action_log_output: self.py_sim_action_log_output.clear(); self.py_sim_action_log_output.setHtml("<i>Simulation log will appear here...</i>")
             
-            initial_log = ["Python FSM Simulation started."] + self.mw.py_fsm_engine.get_last_executed_actions_log()
+            initial_log = ["Python FSM Simulation started."] + self.mw.py_fsm_engine.get_last_executed_actions_log() # Tick will be 0 for init logs
             self.append_to_action_log(initial_log)
-            self.update_dock_ui_contents()
+            self.update_dock_ui_contents() # This will show tick 0
         except FSMError as e:
             logger.error(f"PySimUI: FSMError during FSMSimulator instantiation: {e}", exc_info=True)
             QMessageBox.critical(self.mw, "FSM Initialization Error", f"Failed to start Python FSM simulation:\n{e}")
@@ -418,9 +419,9 @@ class PySimulationUIManager(QObject):
         self.mw.py_fsm_engine = None 
         self._set_simulation_active_state(False) 
         
-        self.update_dock_ui_contents() 
+        self.update_dock_ui_contents() # This will reset tick display to 0
         if not silent:
-            self.append_to_action_log(["Python FSM Simulation stopped."])
+            self.append_to_action_log(["Python FSM Simulation stopped."]) # Tick will be from before stop
             logger.info("PySimUI: Simulation stopped by user.")
 
 
@@ -432,13 +433,13 @@ class PySimulationUIManager(QObject):
             QMessageBox.warning(self.mw, "Simulation Not Active", "Python simulation is not running.")
             return
         try:
-            self.mw.py_fsm_engine.reset()
+            self.mw.py_fsm_engine.reset() # This resets tick to 0 in simulator
             if self.py_sim_action_log_output: 
-                self.py_sim_action_log_output.append("<hr style='border-color:" + COLOR_BORDER_LIGHT +"; margin: 5px 0;'><i style='color:" + COLOR_TEXT_SECONDARY +";'>Simulation Reset</i><hr style='border-color:" + COLOR_BORDER_LIGHT +"; margin: 5px 0;'>")
+                self.py_sim_action_log_output.append("<hr style='border-color:" + COLOR_BORDER_LIGHT +"; margin: 5px 0;'><i style='color:" + COLOR_TEXT_SECONDARY +";'>Simulation Reset (Tick will be 0 for next FSM actions)</i><hr style='border-color:" + COLOR_BORDER_LIGHT +"; margin: 5px 0;'>")
             
             self._highlight_sim_taken_transition(None, None, None) 
-            self.append_to_action_log(self.mw.py_fsm_engine.get_last_executed_actions_log())
-            self.update_dock_ui_contents()
+            self.append_to_action_log(self.mw.py_fsm_engine.get_last_executed_actions_log()) # Logs from reset (will show tick 0)
+            self.update_dock_ui_contents() # Updates UI to show tick 0
         except FSMError as e:
             logger.error(f"PySimUI: FSMError during reset: {e}", exc_info=True)
             QMessageBox.critical(self.mw, "FSM Reset Error", f"Failed to reset simulation:\n{e}")
@@ -457,9 +458,9 @@ class PySimulationUIManager(QObject):
             return
         try:
             self._highlight_sim_taken_transition(None, None, None) 
-            _, log_entries = self.mw.py_fsm_engine.step(event_name=None) # Explicitly None for internal step
+            _, log_entries = self.mw.py_fsm_engine.step(event_name=None) # Simulator increments tick
             self.append_to_action_log(log_entries) 
-            self.update_dock_ui_contents()
+            self.update_dock_ui_contents() # Shows new tick
             if self.mw.py_fsm_engine.simulation_halted_flag:
                 self.append_to_action_log(["[HALTED] Simulation halted due to an error. Please Reset."]); QMessageBox.warning(self.mw, "Simulation Halted", "The simulation has been halted due to an FSM action error. Please reset.")
         except FSMError as e: 
@@ -474,35 +475,4 @@ class PySimulationUIManager(QObject):
     def on_trigger_py_event(self):
         logger.debug("PySimUI: on_trigger_py_event CALLED!")
         if not self.mw.py_fsm_engine or not self.mw.py_sim_active:
-            QMessageBox.warning(self.mw, "Simulation Not Active", "Python simulation is not running.")
-            return
-        
-        event_name_combo = self.py_sim_event_combo.currentText() if self.py_sim_event_combo else ""
-        event_name_edit = self.py_sim_event_name_edit.text().strip() if self.py_sim_event_name_edit else ""
-        
-        event_to_trigger = event_name_edit if event_name_edit else (event_name_combo if event_name_combo != "None (Internal Step)" else None)
-        logger.debug(f"PySimUI: Event to trigger: '{event_to_trigger}' (from edit: '{event_name_edit}', from combo: '{event_name_combo}')")
-
-
-        if not event_to_trigger: # If no event specified (e.g., edit is empty and combo is "None")
-            self.append_to_action_log(["Info: No specific event provided to trigger. Use 'Step' for internal tick."])
-            # self.on_step_py_simulation() # Or just do nothing and let user click Step
-            return
-        
-        self._highlight_sim_taken_transition(None, None, None) 
-        self.append_to_action_log([f"--- Triggering event: '{html.escape(event_to_trigger)}' ---"])
-        try:
-            _, log_entries = self.mw.py_fsm_engine.step(event_name=event_to_trigger)
-            self.append_to_action_log(log_entries)
-            self.update_dock_ui_contents()
-            if self.py_sim_event_name_edit: self.py_sim_event_name_edit.clear()
-            
-            if self.mw.py_fsm_engine.simulation_halted_flag:
-                self.append_to_action_log(["[HALTED] Simulation halted due to an error. Please Reset."]); QMessageBox.warning(self.mw, "Simulation Halted", "The simulation has been halted due to an FSM action error. Please reset.")
-        except FSMError as e:
-            QMessageBox.warning(self.mw, "Simulation Event Error", str(e))
-            self.append_to_action_log([f"ERROR EVENT '{html.escape(event_to_trigger)}': {e}"]); logger.error("PySimUI: Event FSMError for '%s': %s", event_to_trigger, e, exc_info=True)
-            if self.mw.py_fsm_engine and self.mw.py_fsm_engine.simulation_halted_flag: self.append_to_action_log(["[HALTED] Simulation halted. Please Reset."])
-        except Exception as e:
-            QMessageBox.critical(self.mw, "Simulation Event Error", f"An unexpected error occurred on event '{html.escape(event_to_trigger)}':\n{type(e).__name__}: {e}")
-            self.append_to_action_log([f"UNEXPECTED ERROR EVENT '{html.escape(event_to_trigger)}': {e}"]); logger.error("PySimUI: Unexpected Event Error for '%s':", event_to_trigger, exc_info=True)
+            Q

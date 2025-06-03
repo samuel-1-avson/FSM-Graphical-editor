@@ -324,7 +324,9 @@ class MainWindow(QMainWindow):
 
         # --- Final AI status update ---
         if self.ai_chat_ui_manager and self.ai_chatbot_manager:
-            QTimer.singleShot(0, lambda: self.on_new_file(silent=True)) # Call after current event loop processing
+            QTimer.singleShot(250, lambda: self.ai_chatbot_manager.set_online_status(
+                self._internet_connected if self._internet_connected is not None else False
+            ))
         else:
             logger.warning("MainWindow: ai_chat_ui_manager or ai_chatbot_manager not fully initialized for final status update.")
 

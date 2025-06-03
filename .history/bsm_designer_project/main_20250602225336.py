@@ -324,7 +324,9 @@ class MainWindow(QMainWindow):
 
         # --- Final AI status update ---
         if self.ai_chat_ui_manager and self.ai_chatbot_manager:
-            QTimer.singleShot(0, lambda: self.on_new_file(silent=True)) # Call after current event loop processing
+            QTimer.singleShot(250, lambda: self.ai_chatbot_manager.set_online_status(
+                self._internet_connected if self._internet_connected is not None else False
+            ))
         else:
             logger.warning("MainWindow: ai_chat_ui_manager or ai_chatbot_manager not fully initialized for final status update.")
 
@@ -785,7 +787,6 @@ class MainWindow(QMainWindow):
                 if item_ref:
                     list_item_widget.setData(Qt.UserRole, item_ref)
                 self.problems_list_widget.addItem(list_item_widget)
-                
 
             self.problems_dock.setWindowTitle(f"Validation Issues ({len(issues_with_items)})")
             if self.problems_dock.isHidden() and len(issues_with_items) > 0:
@@ -793,7 +794,7 @@ class MainWindow(QMainWindow):
                 self.problems_dock.raise_()
         else:
             self.problems_list_widget.addItem("No validation issues found.")
-            self.problems_list_widget.clear()
+            
             self.problems_dock.setWindowTitle("Validation Issues")
 
 

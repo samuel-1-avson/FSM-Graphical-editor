@@ -1,17 +1,19 @@
 # FILE: bsm_designer_project/ui_py_simulation_manager.py
+# Full content for ui_py_simulation_manager.py with Improvement 3 applied.
 
+# bsm_designer_project/ui_py_simulation_manager.py
 import html
-import re 
+import re # Added for parsing log messages
 from PyQt5.QtWidgets import (
     QLabel, QTextEdit, QComboBox, QLineEdit, QPushButton, QTableWidget,
     QTableWidgetItem, QAction, QMessageBox, QGroupBox, QHBoxLayout, QVBoxLayout,
     QToolButton, QHeaderView, QAbstractItemView, QWidget, QStyle
 )
 from PyQt5.QtGui import QIcon, QColor, QPalette
-from PyQt5.QtCore import QObject, pyqtSlot, pyqtSignal, QSize, Qt, QTime, QTimer
+from PyQt5.QtCore import QObject, pyqtSlot, pyqtSignal, QSize, Qt, QTime, QTimer # Added QTimer
 
 from fsm_simulator import FSMSimulator, FSMError
-from graphics_items import GraphicsStateItem, GraphicsTransitionItem
+from graphics_items import GraphicsStateItem, GraphicsTransitionItem # Added GraphicsTransitionItem
 from utils import get_standard_icon
 from config import (APP_FONT_SIZE_SMALL, COLOR_ACCENT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_TEXT_PRIMARY,
                     COLOR_PY_SIM_STATE_ACTIVE, COLOR_ACCENT_ERROR, COLOR_ACCENT_SUCCESS, COLOR_ACCENT_WARNING,
@@ -36,7 +38,6 @@ class PySimulationUIManager(QObject):
         self.py_sim_event_name_edit: QLineEdit = None
         self.py_sim_trigger_event_btn: QPushButton = None
         self.py_sim_current_state_label: QLabel = None
-        self.py_sim_current_tick_label: QLabel = None # New for tick display
         self.py_sim_variables_table: QTableWidget = None
         self.py_sim_action_log_output: QTextEdit = None
         self._py_sim_currently_highlighted_item: GraphicsStateItem | None = None
@@ -93,7 +94,7 @@ class PySimulationUIManager(QObject):
             self.py_sim_reset_btn.setIcon(get_standard_icon(QStyle.SP_MediaSkipBackward, "Py«"))
             self.py_sim_reset_btn.clicked.connect(self.on_reset_py_simulation)
 
-        self.py_sim_step_btn = QPushButton("Step (Internal/Tick)") # Clarified Step button
+        self.py_sim_step_btn = QPushButton("Step")
         self.py_sim_step_btn.setIcon(get_standard_icon(QStyle.SP_MediaSeekForward, "Step"))
         self.py_sim_step_btn.clicked.connect(self.on_step_py_simulation)
 
@@ -109,23 +110,16 @@ class PySimulationUIManager(QObject):
         self.py_sim_event_name_edit = QLineEdit(); self.py_sim_event_name_edit.setPlaceholderText("Custom event name")
         event_layout.addWidget(self.py_sim_event_name_edit, 1)
         
-        self.py_sim_trigger_event_btn = QPushButton("Trigger Event") # Clarified button
-        self.py_sim_trigger_event_btn.setIcon(get_standard_icon(QStyle.SP_MediaPlay, "Trg")) # Keep icon as is
+        self.py_sim_trigger_event_btn = QPushButton("Trigger")
+        self.py_sim_trigger_event_btn.setIcon(get_standard_icon(QStyle.SP_MediaPlay, "Trg"))
         self.py_sim_trigger_event_btn.clicked.connect(self.on_trigger_py_event)
         event_layout.addWidget(self.py_sim_trigger_event_btn)
         event_group.setLayout(event_layout); py_sim_layout.addWidget(event_group)
 
-        state_group = QGroupBox("Current Status") # Renamed
+        state_group = QGroupBox("Current State")
         state_layout = QVBoxLayout()
         self.py_sim_current_state_label = QLabel("<i>Not Running</i>"); self.py_sim_current_state_label.setStyleSheet("font-size: 9pt; padding: 3px;")
         state_layout.addWidget(self.py_sim_current_state_label)
-
-        # --- NEW: Tick Display ---
-        self.py_sim_current_tick_label = QLabel("Tick: 0")
-        self.py_sim_current_tick_label.setStyleSheet(f"font-size: {APP_FONT_SIZE_SMALL}; color: {COLOR_TEXT_SECONDARY}; padding: 2px 3px;")
-        state_layout.addWidget(self.py_sim_current_tick_label)
-        # --- END NEW ---
-
         state_group.setLayout(state_layout); py_sim_layout.addWidget(state_group)
 
         variables_group = QGroupBox("Variables")
@@ -237,11 +231,10 @@ class PySimulationUIManager(QObject):
             if self.py_sim_current_state_label:
                 self.py_sim_current_state_label.setText("<i>Not Running</i>")
                 self.py_sim_current_state_label.setStyleSheet(f"font-size: 9pt; padding: 3px; color: {COLOR_TEXT_SECONDARY}; background-color: {COLOR_BACKGROUND_MEDIUM}; border-radius:3px;")
-            if self.py_sim_current_tick_label: self.py_sim_current_tick_label.setText("Tick: 0") # Reset tick display
 
             if self.py_sim_variables_table: self.py_sim_variables_table.setRowCount(0)
             self._highlight_sim_active_state(None)
-            self._highlight_sim_taken_transition(None, None, None)
+            self._highlight_sim_taken_transition(None, None, None) # Clear transition highlight
             if self.py_sim_event_combo: self.py_sim_event_combo.clear(); self.py_sim_event_combo.addItem("None (Internal Step)")
             self._update_internal_controls_enabled_state()
             return
@@ -252,16 +245,24 @@ class PySimulationUIManager(QObject):
             self.py_sim_current_state_label.setText(f"<b>{html.escape(display_state_name)}</b>")
             active_color = COLOR_PY_SIM_STATE_ACTIVE
             active_bg_color = QColor(active_color).lighter(170).name()
-            active_text_color_final = COLOR_TEXT_PRIMARY if QColor(active_bg_color).lightnessF() > 0.5 else QColor("white").name()
+            
+            bg_lum = QColor(active_bg_color).lightnessF()
+            # Determine text color based on background luminance for better contrast
+            # Defaulting to COLOR_TEXT_PRIMARY if not explicitly set, then checking contrast
+            active_text_color = COLOR_TEXT_PRIMARY 
+            if hasattr(self.py_sim_current_state_label.palette().color(QPalette.WindowText), 'lightnessF'):
+                text_lum = self.py_sim_current_state_label.palette().color(QPalette.WindowText).lightnessF()
+            else: # Fallback if color doesn't have lightnessF (e.g. not a QColor)
+                text_lum = 0.0 if QColor(active_text_color).lightnessF() < 0.5 else 1.0
+
+            active_text_color_final = COLOR_TEXT_PRIMARY if bg_lum > 0.5 else QColor("white").name()
+
+
             self.py_sim_current_state_label.setStyleSheet(f"font-size: 9pt; padding: 3px; color: {active_text_color_final}; background-color: {active_bg_color}; border: 1px solid {active_color.name()}; border-radius:3px; font-weight:bold;")
 
-        # --- NEW: Update Tick Display ---
-        if self.py_sim_current_tick_label and self.mw.py_fsm_engine:
-            self.py_sim_current_tick_label.setText(f"Tick: {self.mw.py_fsm_engine.current_tick}")
-        # --- END NEW ---
-
         self._highlight_sim_active_state(hierarchical_state_name)
-        
+        # Note: _highlight_sim_taken_transition is now called from append_to_action_log
+
         all_vars = []
         if self.mw.py_fsm_engine:
             all_vars.extend([(k, str(v)) for k, v in sorted(self.mw.py_fsm_engine.get_variables().items())])
@@ -285,12 +286,12 @@ class PySimulationUIManager(QObject):
             
             possible_events_set.update(self.mw.py_fsm_engine.get_possible_events_from_current_state())
             
-            possible_events = sorted(list(filter(None, possible_events_set))) # Filter out None or empty strings
+            possible_events = sorted(list(possible_events_set))
 
             if possible_events: self.py_sim_event_combo.addItems(possible_events)
             
             idx = self.py_sim_event_combo.findText(current_text)
-            self.py_sim_event_combo.setCurrentIndex(idx if idx != -1 else 0)
+            self.py_sim_event_combo.setCurrentIndex(idx if idx != -1 else (0 if not possible_events else self.py_sim_event_combo.count() - len(possible_events)))
         
         self._update_internal_controls_enabled_state()
 
@@ -306,13 +307,12 @@ class PySimulationUIManager(QObject):
 
         last_source_state, last_target_state, last_event = None, None, None
         for entry in reversed(log_entries): 
-            # Regex to match "[Tick X] After transition on 'EVENT' from 'SOURCE' to 'TARGET'"
-            match = re.search(r"\[Tick \d+\] After transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
+            match = re.search(r"After transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
             if match:
                 last_event, last_source_state, last_target_state = match.groups()
                 break 
             else: 
-                match_before = re.search(r"\[Tick \d+\] Before transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
+                match_before = re.search(r"Before transition on '([^']*)' from '([^']*)' to '([^']*)'", entry)
                 if match_before:
                     last_event, last_source_state, last_target_state = match_before.groups()
         
@@ -321,19 +321,7 @@ class PySimulationUIManager(QObject):
         
         for entry in log_entries:
             timestamp = QTime.currentTime().toString('hh:mm:ss.zzz')
-            
-            # Extract tick if present
-            tick_str = ""
-            tick_match = re.match(r"(\[SUB\] )*\[Tick (\d+)\] (.*)", entry)
-            if tick_match:
-                sub_prefix = tick_match.group(1) or ""
-                tick_val = tick_match.group(2)
-                actual_entry_msg = tick_match.group(3)
-                tick_str = f"<span style='color:{QColor(COLOR_TEXT_SECONDARY).lighter(110).name()}; font-size:7pt;'>{sub_prefix}Tick {tick_val}</span> "
-            else:
-                actual_entry_msg = entry
-
-            cleaned_entry = html.escape(actual_entry_msg)
+            cleaned_entry = html.escape(entry)
             current_color = default_log_color
             style_tags = ("", "")
 
@@ -348,9 +336,7 @@ class PySimulationUIManager(QObject):
             elif "No eligible transition" in entry or "event is not allowed" in entry:
                 current_color = COLOR_TEXT_SECONDARY
             
-            formatted_log_line = (f"<span style='color:{time_color}; font-size:7pt;'>[{timestamp}]</span> "
-                                  f"{tick_str}"
-                                  f"<span style='color:{current_color};'>{style_tags[0]}{cleaned_entry}{style_tags[1]}</span>")
+            formatted_log_line = f"<span style='color:{time_color}; font-size:7pt;'>[{timestamp}]</span> <span style='color:{current_color};'>{style_tags[0]}{cleaned_entry}{style_tags[1]}</span>"
             self.py_sim_action_log_output.append(formatted_log_line)
         
         self.py_sim_action_log_output.verticalScrollBar().setValue(self.py_sim_action_log_output.verticalScrollBar().maximum())
@@ -413,7 +399,7 @@ class PySimulationUIManager(QObject):
             return 
         
         self._highlight_sim_active_state(None) 
-        self._highlight_sim_taken_transition(None, None, None) 
+        self._highlight_sim_taken_transition(None, None, None) # Clear transition highlight explicitly
 
         self.mw.py_fsm_engine = None 
         self._set_simulation_active_state(False) 
@@ -457,7 +443,7 @@ class PySimulationUIManager(QObject):
             return
         try:
             self._highlight_sim_taken_transition(None, None, None) 
-            _, log_entries = self.mw.py_fsm_engine.step(event_name=None) # Explicitly None for internal step
+            _, log_entries = self.mw.py_fsm_engine.step(event_name=None)
             self.append_to_action_log(log_entries) 
             self.update_dock_ui_contents()
             if self.mw.py_fsm_engine.simulation_halted_flag:
@@ -484,9 +470,8 @@ class PySimulationUIManager(QObject):
         logger.debug(f"PySimUI: Event to trigger: '{event_to_trigger}' (from edit: '{event_name_edit}', from combo: '{event_name_combo}')")
 
 
-        if not event_to_trigger: # If no event specified (e.g., edit is empty and combo is "None")
-            self.append_to_action_log(["Info: No specific event provided to trigger. Use 'Step' for internal tick."])
-            # self.on_step_py_simulation() # Or just do nothing and let user click Step
+        if not event_to_trigger:
+            self.on_step_py_simulation() 
             return
         
         self._highlight_sim_taken_transition(None, None, None) 
