@@ -104,6 +104,7 @@ class DraggableToolButton(QPushButton):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.drag_start_position = QPoint()
         self.setIconSize(QSize(20,20))
+        
 
 
     def mousePressEvent(self, event: QMouseEvent):
@@ -589,31 +590,35 @@ class MainWindow(QMainWindow):
         draggable_group_box.setLayout(draggable_layout); tools_main_layout.addWidget(draggable_group_box)
         self.templates_group_box = QGroupBox("FSM Templates"); templates_layout = QVBoxLayout(); templates_layout.setSpacing(6); self.template_buttons_container = QWidget(); self.template_buttons_layout = QVBoxLayout(self.template_buttons_container); self.template_buttons_layout.setContentsMargins(0,0,0,0); self.template_buttons_layout.setSpacing(4); templates_layout.addWidget(self.template_buttons_container); templates_layout.addStretch(); self.templates_group_box.setLayout(templates_layout); tools_main_layout.addWidget(self.templates_group_box)
         tools_main_layout.addStretch(); self.tools_dock.setWidget(tools_widget_main); self.addDockWidget(Qt.LeftDockWidgetArea, self.tools_dock)
-        
-        # --- Properties Dock (New Structure) ---
+        # --- Properties Dock ---
         self.properties_dock = QDockWidget("Item Properties", self)
         self.properties_dock.setObjectName("PropertiesDock")
+    
+    # Main container widget for the dock
         self.properties_dock_widget_main = QWidget()
         self.properties_dock_main_layout = QVBoxLayout(self.properties_dock_widget_main)
         self.properties_dock_main_layout.setContentsMargins(8,8,8,8)
         self.properties_dock_main_layout.setSpacing(6)
 
+    # Placeholder label for when no item or multiple items are selected
         self.properties_placeholder_label = QLabel("<i>Select a single item to view/edit its properties.</i>")
-        self.properties_placeholder_label.setObjectName("PropertiesLabel")
+        self.properties_placeholder_label.setObjectName("PropertiesLabel") # Keep for styling
         self.properties_placeholder_label.setWordWrap(True)
         self.properties_placeholder_label.setTextFormat(Qt.RichText)
         self.properties_placeholder_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.properties_dock_main_layout.addWidget(self.properties_placeholder_label)
 
+    # Container for dynamic editors (initially hidden)
         self.properties_editor_container = QWidget()
-        self.properties_editor_layout = QFormLayout(self.properties_editor_container)
+        self.properties_editor_layout = QFormLayout(self.properties_editor_container) # Use QFormLayout for label-field pairs
         self.properties_editor_layout.setContentsMargins(0,0,0,0)
         self.properties_editor_layout.setSpacing(8)
         self.properties_dock_main_layout.addWidget(self.properties_editor_container)
-        self.properties_editor_container.setVisible(False)
+        self.properties_editor_container.setVisible(False) # Hide initially
 
-        self.properties_dock_main_layout.addStretch(1)
+        self.properties_dock_main_layout.addStretch(1) # Push editors and buttons to top/bottom
 
+    # Buttons at the bottom of the dock
         self.properties_apply_button = QPushButton(get_standard_icon(QStyle.SP_DialogApplyButton, "Apply"), "Apply Changes")
         self.properties_apply_button.setEnabled(False)
         self.properties_apply_button.clicked.connect(self._on_apply_dock_properties)
@@ -627,19 +632,28 @@ class MainWindow(QMainWindow):
         self.properties_edit_dialog_button.setEnabled(False)
         self.properties_edit_dialog_button.clicked.connect(self._on_edit_selected_item_properties_from_dock_button)
 
+
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.properties_revert_button)
         button_layout.addStretch()
         button_layout.addWidget(self.properties_apply_button)
     
         self.properties_dock_main_layout.addLayout(button_layout)
-        self.properties_dock_main_layout.addWidget(self.properties_edit_dialog_button)
+        self.properties_dock_main_layout.addWidget(self.properties_edit_dialog_button) # Place advanced edit button separately
 
         self.properties_dock.setWidget(self.properties_dock_widget_main)
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
 
+    # Store references to currently displayed editor widgets
         self._dock_property_editors = {} 
         self._current_edited_item_in_dock = None
+        # The original simpler properties_dock setup is now replaced by the detailed one above.
+        # self.properties_dock = QDockWidget("Item Properties", self); self.properties_dock.setObjectName("PropertiesDock")
+        # properties_widget = QWidget(); properties_layout = QVBoxLayout(properties_widget); properties_layout.setContentsMargins(8,8,8,8); properties_layout.setSpacing(6)
+        # self.properties_editor_label = QLabel("<i>Select an item to view its properties.</i>"); self.properties_editor_label.setObjectName("PropertiesLabel"); self.properties_editor_label.setWordWrap(True); self.properties_editor_label.setTextFormat(Qt.RichText); self.properties_editor_label.setAlignment(Qt.AlignTop | Qt.AlignLeft); properties_layout.addWidget(self.properties_editor_label, 1)
+        # self.properties_edit_button = QPushButton(get_standard_icon(QStyle.SP_DialogApplyButton, "Edt"),"Edit Properties...") ; self.properties_edit_button.setEnabled(False); self.properties_edit_button.clicked.connect(self._on_edit_selected_item_properties_from_dock); properties_layout.addWidget(self.properties_edit_button)
+        # self.properties_dock.setWidget(properties_widget); self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
+
 
         self.log_dock = QDockWidget("Application Log", self); self.log_dock.setObjectName("LogDock")
         log_widget = QWidget(); log_layout = QVBoxLayout(log_widget); log_layout.setContentsMargins(0,0,0,0); self.log_output = QTextEdit(); self.log_output.setObjectName("LogOutputWidget"); self.log_output.setReadOnly(True); log_layout.addWidget(self.log_output); self.log_dock.setWidget(log_widget)
@@ -936,8 +950,7 @@ class MainWindow(QMainWindow):
         layout_start_x, layout_start_y = 100, 100; default_item_width, default_item_height = 120, 60; GV_SCALE = 1.3; NODE_SEP = 0.8; RANK_SEP = 1.5
         G = pgv.AGraph(directed=True, strict=False, rankdir='TB', ratio='auto', nodesep=str(NODE_SEP), ranksep=str(RANK_SEP)); G.node_attr['shape'] = 'box'; G.node_attr['style'] = 'rounded,filled'; G.node_attr['fillcolor'] = QColor(COLOR_ITEM_STATE_DEFAULT_BG).name(); G.node_attr['color'] = QColor(COLOR_ITEM_STATE_DEFAULT_BORDER).name(); G.node_attr['fontname'] = "Arial"; G.node_attr['fontsize'] = "10"; G.edge_attr['color'] = QColor(COLOR_ITEM_TRANSITION_DEFAULT).name(); G.edge_attr['fontname'] = "Arial"; G.edge_attr['fontsize'] = "9"
         for state_data in fsm_data.get('states', []): name = state_data.get('name'); label = (name[:25] + '...') if name and len(name) > 28 else name; G.add_node(name, label=label, width=str(default_item_width/72.0 * 1.1), height=str(default_item_height/72.0 * 1.1)) if name else None
-        for trans_data in fsm_data.get('transitions', []): # Corrected: removed extra ')'
-            source, target = trans_data.get('source'), trans_data.get('target'); event_label = trans_data.get('event', ''); event_label = (event_label[:12] + '...') if len(event_label) > 15 else event_label; G.add_edge(source, target, label=event_label) if source and target and G.has_node(source) and G.has_node(target) else logger.warning("MW: Skipping Graphviz edge for AI FSM due to missing node(s): %s->%s", source, target)
+        for trans_data in fsm_data.get('transitions', []): source, target = trans_data.get('source'), trans_data.get('target'); event_label = trans_data.get('event', ''); event_label = (event_label[:12] + '...') if len(event_label) > 15 else event_label; G.add_edge(source, target, label=event_label) if source and target and G.has_node(source) and G.has_node(target) else logger.warning("MW: Skipping Graphviz edge for AI FSM due to missing node(s): %s->%s", source, target)
         graphviz_positions = {}
         try:
             G.layout(prog="dot"); logger.debug("MW: Graphviz layout ('dot') for AI FSM successful.")
@@ -997,62 +1010,44 @@ class MainWindow(QMainWindow):
     def _update_properties_dock(self):
         selected_items = self.scene.selectedItems()
         
-        # Clear previous dynamic editors from the container
-        while self.properties_editor_layout.count():
-            child_layout_item = self.properties_editor_layout.takeAt(0)
-            if child_layout_item:
-                widget = child_layout_item.widget()
-                if widget:
-                    widget.deleteLater()
-                # also remove layout if it was a layout item
-                layout_in_item = child_layout_item.layout()
-                if layout_in_item:
-                    # Recursively delete widgets in nested layouts
-                    while layout_in_item.count():
-                        nested_child = layout_in_item.takeAt(0)
-                        if nested_child.widget():
-                            nested_child.widget().deleteLater()
-        
+        # Clear previous dynamic editors if any
+        for editor_widget in self._dock_property_editors.values():
+            if editor_widget: # editor_widget could be a layout or a QWidget
+                if isinstance(editor_widget, QLayout):
+                    while editor_widget.count():
+                        child = editor_widget.takeAt(0)
+                        if child.widget():
+                            child.widget().deleteLater()
+                    # It seems QFormLayout doesn't have a simple clear method for its rows
+                    # Re-creating it or removing rows one by one might be needed if complex
+                    # For now, if it's a layout, this might not be enough.
+                    # Let's assume editor_widget is the container holding the form layout.
+                else: # It's a QWidget
+                    editor_widget.deleteLater()
+
         self._dock_property_editors.clear()
         self._current_edited_item_in_dock = None
         
+        # Setup based on selection
         if len(selected_items) == 1:
             self._current_edited_item_in_dock = selected_items[0]
-            item_data = self._current_edited_item_in_dock.get_data() if hasattr(self._current_edited_item_in_dock, 'get_data') else {}
-
             self.properties_editor_container.setVisible(True)
             self.properties_placeholder_label.setVisible(False)
             self.properties_edit_dialog_button.setEnabled(True)
-
-            # Placeholder: populate based on item type
-            # This part needs to be fully implemented to create QLineEdit, QCheckBox etc.
-            # and add them to self.properties_editor_layout.
-            # For now, we use the placeholder label to give feedback.
-            if isinstance(self._current_edited_item_in_dock, GraphicsStateItem):
-                name_edit = QLineEdit(item_data.get('name', ''))
-                name_edit.textChanged.connect(self._on_dock_property_changed)
-                self.properties_editor_layout.addRow("Name:", name_edit)
-                self._dock_property_editors['name'] = name_edit
-                # Add more editors for other state properties...
-            elif isinstance(self._current_edited_item_in_dock, GraphicsTransitionItem):
-                event_edit = QLineEdit(item_data.get('event', ''))
-                event_edit.textChanged.connect(self._on_dock_property_changed)
-                self.properties_editor_layout.addRow("Event:", event_edit)
-                self._dock_property_editors['event'] = event_edit
-                # Add more editors for condition, action, etc.
-            elif isinstance(self._current_edited_item_in_dock, GraphicsCommentItem):
-                text_edit = QTextEdit(item_data.get('text', ''))
-                text_edit.setFixedHeight(60) # Example height
-                text_edit.textChanged.connect(self._on_dock_property_changed)
-                self.properties_editor_layout.addRow("Text:", text_edit)
-                self._dock_property_editors['text'] = text_edit
-            else: # Fallback for unhandled item types or if editor isn't fully built
-                 self.properties_placeholder_label.setText(
-                    f"<i>Editing: {type(self._current_edited_item_in_dock).__name__}.<br>"
-                    f"Dock editor UI needs full implementation for this item. Use 'Advanced Edit...'</i>"
-                 )
-                 self.properties_editor_container.setVisible(False)
-                 self.properties_placeholder_label.setVisible(True)
+            # TODO: Populate self.properties_editor_layout based on item type
+            # This is where you'd add QLineEdit, QCheckBox, etc., to self.properties_editor_layout
+            # and store references in self._dock_property_editors
+            # Example:
+            # if isinstance(self._current_edited_item_in_dock, GraphicsStateItem):
+            #     name_edit = QLineEdit(self._current_edited_item_in_dock.text_label)
+            #     name_edit.textChanged.connect(self._on_dock_property_changed)
+            #     self.properties_editor_layout.addRow("Name:", name_edit)
+            #     self._dock_property_editors['name'] = name_edit
+            # ... and so on for other properties and item types ...
+            # For now, we'll just use the existing HTML display logic as a placeholder for the content.
+            self.properties_editor_label.setText(f"Editing: {type(self._current_edited_item_in_dock).__name__}. (Dock editor UI not fully implemented)")
+            self.properties_editor_label.setVisible(True) # Show simple text for now
+            self.properties_editor_container.setVisible(False) # Hide actual editor form
 
         elif len(selected_items) > 1:
             self.properties_placeholder_label.setText(f"<i><b>{len(selected_items)} items selected.</b><br><span style='font-size:{APP_FONT_SIZE_SMALL}; color:{COLOR_TEXT_SECONDARY};'>Select a single item to edit properties.</span></i>")
@@ -1065,7 +1060,7 @@ class MainWindow(QMainWindow):
             self.properties_placeholder_label.setVisible(True)
             self.properties_edit_dialog_button.setEnabled(False)
 
-        self.properties_apply_button.setEnabled(False) 
+        self.properties_apply_button.setEnabled(False) # Disabled until a change is made
         self.properties_revert_button.setEnabled(False)
 
 
@@ -1123,11 +1118,10 @@ class MainWindow(QMainWindow):
         # Note: bp_action is handled by its triggered.connect, no need for `elif action == bp_action`
 
 
-    # This method was part of the simplified properties dock and is no longer needed
-    # def _on_edit_selected_item_properties_from_dock(self):
-    #     selected = self.scene.selectedItems()
-    #     if len(selected) == 1:
-    #         self.scene.edit_item_properties(selected[0])
+    def _on_edit_selected_item_properties_from_dock(self): # Original simplified dock edit button
+        selected = self.scene.selectedItems()
+        if len(selected) == 1:
+            self.scene.edit_item_properties(selected[0])
 
     def _update_window_title(self):
         file_name = os.path.basename(self.current_file_path) if self.current_file_path else "Untitled"
@@ -1925,9 +1919,9 @@ class MainWindow(QMainWindow):
 
     def _update_py_simulation_actions_enabled_state(self):
         is_matlab_op_running = False
-        if hasattr(self, 'progress_bar') and self.progress_bar: 
+        if hasattr(self, 'progress_bar') and self.progress_bar:
             is_matlab_op_running = self.progress_bar.isVisible()
-            
+
         sim_can_start = not self.py_sim_active and not is_matlab_op_running
         sim_can_be_controlled = self.py_sim_active and not is_matlab_op_running
 

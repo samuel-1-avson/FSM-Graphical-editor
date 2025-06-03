@@ -590,56 +590,11 @@ class MainWindow(QMainWindow):
         self.templates_group_box = QGroupBox("FSM Templates"); templates_layout = QVBoxLayout(); templates_layout.setSpacing(6); self.template_buttons_container = QWidget(); self.template_buttons_layout = QVBoxLayout(self.template_buttons_container); self.template_buttons_layout.setContentsMargins(0,0,0,0); self.template_buttons_layout.setSpacing(4); templates_layout.addWidget(self.template_buttons_container); templates_layout.addStretch(); self.templates_group_box.setLayout(templates_layout); tools_main_layout.addWidget(self.templates_group_box)
         tools_main_layout.addStretch(); self.tools_dock.setWidget(tools_widget_main); self.addDockWidget(Qt.LeftDockWidgetArea, self.tools_dock)
         
-        # --- Properties Dock (New Structure) ---
-        self.properties_dock = QDockWidget("Item Properties", self)
-        self.properties_dock.setObjectName("PropertiesDock")
-        self.properties_dock_widget_main = QWidget()
-        self.properties_dock_main_layout = QVBoxLayout(self.properties_dock_widget_main)
-        self.properties_dock_main_layout.setContentsMargins(8,8,8,8)
-        self.properties_dock_main_layout.setSpacing(6)
-
-        self.properties_placeholder_label = QLabel("<i>Select a single item to view/edit its properties.</i>")
-        self.properties_placeholder_label.setObjectName("PropertiesLabel")
-        self.properties_placeholder_label.setWordWrap(True)
-        self.properties_placeholder_label.setTextFormat(Qt.RichText)
-        self.properties_placeholder_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self.properties_dock_main_layout.addWidget(self.properties_placeholder_label)
-
-        self.properties_editor_container = QWidget()
-        self.properties_editor_layout = QFormLayout(self.properties_editor_container)
-        self.properties_editor_layout.setContentsMargins(0,0,0,0)
-        self.properties_editor_layout.setSpacing(8)
-        self.properties_dock_main_layout.addWidget(self.properties_editor_container)
-        self.properties_editor_container.setVisible(False)
-
-        self.properties_dock_main_layout.addStretch(1)
-
-        self.properties_apply_button = QPushButton(get_standard_icon(QStyle.SP_DialogApplyButton, "Apply"), "Apply Changes")
-        self.properties_apply_button.setEnabled(False)
-        self.properties_apply_button.clicked.connect(self._on_apply_dock_properties)
-    
-        self.properties_revert_button = QPushButton(get_standard_icon(QStyle.SP_DialogCancelButton, "Revert"), "Revert")
-        self.properties_revert_button.setEnabled(False)
-        self.properties_revert_button.clicked.connect(self._on_revert_dock_properties)
-
-        self.properties_edit_dialog_button = QPushButton(get_standard_icon(QStyle.SP_FileDialogDetailedView, "AdvEdit"), "Advanced Edit...")
-        self.properties_edit_dialog_button.setToolTip("Open full properties dialog")
-        self.properties_edit_dialog_button.setEnabled(False)
-        self.properties_edit_dialog_button.clicked.connect(self._on_edit_selected_item_properties_from_dock_button)
-
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(self.properties_revert_button)
-        button_layout.addStretch()
-        button_layout.addWidget(self.properties_apply_button)
-    
-        self.properties_dock_main_layout.addLayout(button_layout)
-        self.properties_dock_main_layout.addWidget(self.properties_edit_dialog_button)
-
-        self.properties_dock.setWidget(self.properties_dock_widget_main)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
-
-        self._dock_property_editors = {} 
-        self._current_edited_item_in_dock = None
+        self.properties_dock = QDockWidget("Item Properties", self); self.properties_dock.setObjectName("PropertiesDock")
+        properties_widget = QWidget(); properties_layout = QVBoxLayout(properties_widget); properties_layout.setContentsMargins(8,8,8,8); properties_layout.setSpacing(6)
+        self.properties_editor_label = QLabel("<i>Select an item to view its properties.</i>"); self.properties_editor_label.setObjectName("PropertiesLabel"); self.properties_editor_label.setWordWrap(True); self.properties_editor_label.setTextFormat(Qt.RichText); self.properties_editor_label.setAlignment(Qt.AlignTop | Qt.AlignLeft); properties_layout.addWidget(self.properties_editor_label, 1)
+        self.properties_edit_button = QPushButton(get_standard_icon(QStyle.SP_DialogApplyButton, "Edt"),"Edit Properties...") ; self.properties_edit_button.setEnabled(False); self.properties_edit_button.clicked.connect(self._on_edit_selected_item_properties_from_dock); properties_layout.addWidget(self.properties_edit_button)
+        self.properties_dock.setWidget(properties_widget); self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
 
         self.log_dock = QDockWidget("Application Log", self); self.log_dock.setObjectName("LogDock")
         log_widget = QWidget(); log_layout = QVBoxLayout(log_widget); log_layout.setContentsMargins(0,0,0,0); self.log_output = QTextEdit(); self.log_output.setObjectName("LogOutputWidget"); self.log_output.setReadOnly(True); log_layout.addWidget(self.log_output); self.log_dock.setWidget(log_widget)
@@ -794,41 +749,6 @@ class MainWindow(QMainWindow):
             self.template_buttons_layout.addWidget(template_btn)
 
         self.template_buttons_layout.addStretch(1)
-        
-        
-        
-    @pyqtSlot()
-    def _on_apply_dock_properties(self):
-        """
-        Apply the edited properties from the dock to the currently selected item.
-        """
-        if self._current_edited_item_in_dock:
-        # You may want to implement logic to update the item with values from the dock's editors.
-        # For now, just refresh the dock and disable the buttons.
-            # This is a placeholder. Actual application logic would involve getting values
-            # from self._dock_property_editors and applying them to self._current_edited_item_in_dock
-            # then potentially creating an UndoCommand.
-            logger.info(f"Properties Dock: Apply clicked for item {self._current_edited_item_in_dock}. (Placeholder - no actual apply logic yet)")
-            
-            # After applying, refresh the dock (which will show the item's now-updated properties)
-            # and disable buttons as changes are now committed (or would be, if implemented).
-            self._update_properties_dock() # Refresh to show committed changes
-            self.properties_apply_button.setEnabled(False)
-            self.properties_revert_button.setEnabled(False)    
-        
-    @pyqtSlot()
-    def _on_revert_dock_properties(self):
-        """
-        Revert any unapplied changes in the properties dock by re-populating it.
-        """
-        if self._current_edited_item_in_dock:
-            logger.info(f"Properties Dock: Revert clicked for item {self._current_edited_item_in_dock}.")
-            self._update_properties_dock() # This re-populates based on item's current data
-            self.properties_apply_button.setEnabled(False)
-            self.properties_revert_button.setEnabled(False)
-        
-        
-        
 
 
     @pyqtSlot(list)
@@ -907,14 +827,8 @@ class MainWindow(QMainWindow):
             if hasattr(action, 'setEnabled'): action.setEnabled(is_editable)
 
         if hasattr(self, 'tools_dock'): self.tools_dock.setEnabled(is_editable)
-        # Update for the new properties dock setup
-        if hasattr(self, 'properties_edit_dialog_button'):
-            self.properties_edit_dialog_button.setEnabled(is_editable and len(self.scene.selectedItems())==1)
-        if hasattr(self, 'properties_apply_button'):
-            self.properties_apply_button.setEnabled(False) # Should be disabled initially or when UI is disabled
-        if hasattr(self, 'properties_revert_button'):
-            self.properties_revert_button.setEnabled(False)
-
+        if hasattr(self, 'properties_edit_button'):
+             self.properties_edit_button.setEnabled(is_editable and len(self.scene.selectedItems())==1)
 
         for item in self.scene.items():
             if isinstance(item, (GraphicsStateItem, GraphicsCommentItem)):
@@ -936,8 +850,7 @@ class MainWindow(QMainWindow):
         layout_start_x, layout_start_y = 100, 100; default_item_width, default_item_height = 120, 60; GV_SCALE = 1.3; NODE_SEP = 0.8; RANK_SEP = 1.5
         G = pgv.AGraph(directed=True, strict=False, rankdir='TB', ratio='auto', nodesep=str(NODE_SEP), ranksep=str(RANK_SEP)); G.node_attr['shape'] = 'box'; G.node_attr['style'] = 'rounded,filled'; G.node_attr['fillcolor'] = QColor(COLOR_ITEM_STATE_DEFAULT_BG).name(); G.node_attr['color'] = QColor(COLOR_ITEM_STATE_DEFAULT_BORDER).name(); G.node_attr['fontname'] = "Arial"; G.node_attr['fontsize'] = "10"; G.edge_attr['color'] = QColor(COLOR_ITEM_TRANSITION_DEFAULT).name(); G.edge_attr['fontname'] = "Arial"; G.edge_attr['fontsize'] = "9"
         for state_data in fsm_data.get('states', []): name = state_data.get('name'); label = (name[:25] + '...') if name and len(name) > 28 else name; G.add_node(name, label=label, width=str(default_item_width/72.0 * 1.1), height=str(default_item_height/72.0 * 1.1)) if name else None
-        for trans_data in fsm_data.get('transitions', []): # Corrected: removed extra ')'
-            source, target = trans_data.get('source'), trans_data.get('target'); event_label = trans_data.get('event', ''); event_label = (event_label[:12] + '...') if len(event_label) > 15 else event_label; G.add_edge(source, target, label=event_label) if source and target and G.has_node(source) and G.has_node(target) else logger.warning("MW: Skipping Graphviz edge for AI FSM due to missing node(s): %s->%s", source, target)
+        for trans_data in fsm_data.get('transitions', []): source, target = trans_data.get('source'), trans_data.get('target'); event_label = trans_data.get('event', ''); event_label = (event_label[:12] + '...') if len(event_label) > 15 else event_label; G.add_edge(source, target, label=event_label) if source and target and G.has_node(source) and G.has_node(target) else logger.warning("MW: Skipping Graphviz edge for AI FSM due to missing node(s): %s->%s", source, target)
         graphviz_positions = {}
         try:
             G.layout(prog="dot"); logger.debug("MW: Graphviz layout ('dot') for AI FSM successful.")
@@ -996,96 +909,134 @@ class MainWindow(QMainWindow):
 
     def _update_properties_dock(self):
         selected_items = self.scene.selectedItems()
-        
-        # Clear previous dynamic editors from the container
-        while self.properties_editor_layout.count():
-            child_layout_item = self.properties_editor_layout.takeAt(0)
-            if child_layout_item:
-                widget = child_layout_item.widget()
-                if widget:
-                    widget.deleteLater()
-                # also remove layout if it was a layout item
-                layout_in_item = child_layout_item.layout()
-                if layout_in_item:
-                    # Recursively delete widgets in nested layouts
-                    while layout_in_item.count():
-                        nested_child = layout_in_item.takeAt(0)
-                        if nested_child.widget():
-                            nested_child.widget().deleteLater()
-        
-        self._dock_property_editors.clear()
-        self._current_edited_item_in_dock = None
-        
+        html_content = ""
+        edit_enabled = False
+        item_type_tooltip = "item"
+
+        font_family_css = f"font-family: '{APP_FONT_FAMILY.split(',')[0].strip()}', sans-serif;"
+        std_font_size_css = f"font-size: {APP_FONT_SIZE_STANDARD};"
+        small_font_size_css = f"font-size: {APP_FONT_SIZE_SMALL};"
+
         if len(selected_items) == 1:
-            self._current_edited_item_in_dock = selected_items[0]
-            item_data = self._current_edited_item_in_dock.get_data() if hasattr(self._current_edited_item_in_dock, 'get_data') else {}
+            item = selected_items[0]
+            props = item.get_data() if hasattr(item, 'get_data') else {}
+            item_type_name = type(item).__name__.replace("Graphics", "").replace("Item", "")
+            item_type_tooltip = item_type_name
+            edit_enabled = True
 
-            self.properties_editor_container.setVisible(True)
-            self.properties_placeholder_label.setVisible(False)
-            self.properties_edit_dialog_button.setEnabled(True)
+            def fmt(txt, max_lines=2, max_line_chars=35, is_code=False):
+                none_style = f"color:{COLOR_TEXT_SECONDARY}; font-style:italic; {small_font_size_css}"
+                if not txt: return f"<span style='{none_style}'>(none)</span>"
 
-            # Placeholder: populate based on item type
-            # This part needs to be fully implemented to create QLineEdit, QCheckBox etc.
-            # and add them to self.properties_editor_layout.
-            # For now, we use the placeholder label to give feedback.
-            if isinstance(self._current_edited_item_in_dock, GraphicsStateItem):
-                name_edit = QLineEdit(item_data.get('name', ''))
-                name_edit.textChanged.connect(self._on_dock_property_changed)
-                self.properties_editor_layout.addRow("Name:", name_edit)
-                self._dock_property_editors['name'] = name_edit
-                # Add more editors for other state properties...
-            elif isinstance(self._current_edited_item_in_dock, GraphicsTransitionItem):
-                event_edit = QLineEdit(item_data.get('event', ''))
-                event_edit.textChanged.connect(self._on_dock_property_changed)
-                self.properties_editor_layout.addRow("Event:", event_edit)
-                self._dock_property_editors['event'] = event_edit
-                # Add more editors for condition, action, etc.
-            elif isinstance(self._current_edited_item_in_dock, GraphicsCommentItem):
-                text_edit = QTextEdit(item_data.get('text', ''))
-                text_edit.setFixedHeight(60) # Example height
-                text_edit.textChanged.connect(self._on_dock_property_changed)
-                self.properties_editor_layout.addRow("Text:", text_edit)
-                self._dock_property_editors['text'] = text_edit
-            else: # Fallback for unhandled item types or if editor isn't fully built
-                 self.properties_placeholder_label.setText(
-                    f"<i>Editing: {type(self._current_edited_item_in_dock).__name__}.<br>"
-                    f"Dock editor UI needs full implementation for this item. Use 'Advanced Edit...'</i>"
-                 )
-                 self.properties_editor_container.setVisible(False)
-                 self.properties_placeholder_label.setVisible(True)
+                txt_str = str(txt)
+                lines = txt_str.split('\n')
 
+                display_lines = []
+                for i, line_content in enumerate(lines):
+                    if i < max_lines:
+                        escaped_line = html.escape(line_content)
+                        if len(escaped_line) > max_line_chars:
+                            display_lines.append(escaped_line[:max_line_chars] + "…")
+                        else:
+                            display_lines.append(escaped_line)
+                    else:
+                        if display_lines:
+                             display_lines[-1] += " …"
+                        else:
+                             display_lines.append("…")
+                        break
+
+                display_html = "<br>".join(display_lines)
+
+                if is_code:
+                    style = (f"font-family: Consolas, 'Courier New', monospace; {small_font_size_css} "
+                             f"background-color: {QColor(COLOR_BACKGROUND_EDITOR_DARK).lighter(115).name()}; "
+                             f"color: {COLOR_TEXT_EDITOR_DARK_PRIMARY}; padding: 2px 4px; border-radius: 3px; "
+                             f"border: 1px solid {QColor(COLOR_BORDER_DARK).lighter(110).name()}; "
+                             f"display: block; white-space: pre-wrap; overflow: hidden; text-overflow: ellipsis;")
+                else:
+                    style = small_font_size_css
+
+                if is_code and not txt.strip():
+                    return f"<span style='{style.replace('display: block;', '')} {none_style.replace('font-style:italic;','')}'> (none) </span>"
+
+                return f"<span style='{style}'>{display_html}</span>"
+
+            def bool_fmt(val):
+                 color_name = COLOR_ACCENT_SUCCESS if val else QColor(COLOR_TEXT_SECONDARY).darker(110).name()
+                 text = "Yes" if val else "No"
+                 current_std_font_size_css_local = f"font-size: {APP_FONT_SIZE_STANDARD};"
+                 return f"<span style='color:{color_name}; font-weight:bold; {current_std_font_size_css_local}'>{text}</span>"
+
+            rows = ""
+            table_style = f"width:100%; border-collapse:collapse; {std_font_size_css} {font_family_css}"
+            td_key_style = f"padding:5px 8px; text-align:right; font-weight:normal; color:{COLOR_TEXT_SECONDARY}; border-bottom:1px solid {COLOR_BORDER_LIGHT}; width:38%; vertical-align:top;"
+            td_val_style = f"padding:5px 8px; border-bottom:1px solid {COLOR_BORDER_LIGHT}; vertical-align:top; word-break:break-all;"
+
+            item_header_html = f"""
+                <div style='{font_family_css}'>
+                    <h4 style='margin:0 0 10px 0; padding-bottom:5px; color:{COLOR_ACCENT_PRIMARY}; border-bottom:2px solid {COLOR_BORDER_MEDIUM}; font-size:11pt; font-weight:bold;'>
+                        {item_type_name} Properties
+                    </h4>
+                <table style='{table_style}'>
+            """
+
+            if isinstance(item, GraphicsStateItem):
+                color_obj = QColor(props.get('color', COLOR_ITEM_STATE_DEFAULT_BG))
+                color_style = f"display:inline-block; width:12px; height:12px; border:1px solid {color_obj.darker(120).name()}; background-color:{color_obj.name()}; margin-right:5px; vertical-align:middle;"
+
+                rows += f"<tr><td style='{td_key_style}'>Name:</td><td style='{td_val_style}'><b>{html.escape(props.get('name', 'N/A'))}</b></td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>Initial:</td><td style='{td_val_style}'>{bool_fmt(props.get('is_initial'))}</td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>Final:</td><td style='{td_val_style}'>{bool_fmt(props.get('is_final'))}</td></tr>"
+
+                if props.get('is_superstate'):
+                    sub_states_count = len(props.get('sub_fsm_data',{}).get('states',[]))
+                    rows += f"<tr><td style='{td_key_style}'>Superstate:</td><td style='{td_val_style}'><span style='color:{COLOR_ACCENT_PRIMARY}; font-weight:bold;'>Yes</span> ({sub_states_count} sub-state{'s' if sub_states_count != 1 else ''})</td></tr>"
+
+                rows += f"<tr><td style='{td_key_style}'>Color:</td><td style='{td_val_style}'><span style='{color_style}'></span>{html.escape(color_obj.name())}</td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>Action Lang:</td><td style='{td_val_style}'><span style='font-family:Consolas,monospace; font-size:{APP_FONT_SIZE_SMALL}'>{html.escape(props.get('action_language','N/A'))}</span></td></tr>"
+                for act_key in ['entry_action', 'during_action', 'exit_action']:
+                    act_label = act_key.replace('_action','').capitalize()
+                    rows += f"<tr><td style='{td_key_style}'>{act_label}:</td><td style='{td_val_style}'>{fmt(props.get(act_key, ''), max_lines=3, max_line_chars=40, is_code=True)}</td></tr>"
+                if props.get('description'): rows += f"<tr><td style='{td_key_style}'>Desc:</td><td style='{td_val_style}white-space:normal;{small_font_size_css}'>{fmt(props.get('description'), max_lines=3, max_line_chars=50)}</td></tr>"
+
+
+            elif isinstance(item, GraphicsTransitionItem):
+                color_obj = QColor(props.get('color', COLOR_ITEM_TRANSITION_DEFAULT))
+                color_style = f"display:inline-block; width:12px; height:12px; border:1px solid {color_obj.darker(120).name()}; background-color:{color_obj.name()}; margin-right:5px; vertical-align:middle;"
+
+                label_parts = []
+                if props.get('event'): label_parts.append(f"<b style='color:{COLOR_ACCENT_PRIMARY};'>{html.escape(props.get('event'))}</b>")
+                if props.get('condition'): label_parts.append(f"<span style='font-family:Consolas,monospace; color:{COLOR_TEXT_SECONDARY}; {small_font_size_css}'>[{fmt(props.get('condition'), max_lines=1, max_line_chars=25, is_code=True)}]</span>")
+                if props.get('action'): label_parts.append(f"<span style='font-family:Consolas,monospace;color:{QColor(COLOR_ACCENT_SECONDARY).darker(110).name()}; {small_font_size_css}'>/{{{fmt(props.get('action'), max_lines=1, max_line_chars=25, is_code=True)}}}</span>")
+                full_label = " ".join(p for p in label_parts if p) or f"<span style='color:{COLOR_TEXT_SECONDARY}; font-style:italic; {small_font_size_css}'>(No Label)</span>"
+
+                rows += f"<tr><td style='{td_key_style}'>Label:</td><td style='{td_val_style} {std_font_size_css}'>{full_label}</td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>From / To:</td><td style='{td_val_style}'><b>{html.escape(props.get('source','N/A'))}</b> → <b>{html.escape(props.get('target','N/A'))}</b></td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>Action Lang:</td><td style='{td_val_style}'><span style='font-family:Consolas,monospace; {small_font_size_css}'>{html.escape(props.get('action_language','N/A'))}</span></td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>Action:</td><td style='{td_val_style}'>{fmt(props.get('action', ''), max_lines=3, max_line_chars=40, is_code=True)}</td></tr>"
+
+                rows += f"<tr><td style='{td_key_style}'>Color:</td><td style='{td_val_style}'><span style='{color_style}'></span>{html.escape(color_obj.name())}</td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>Curve (Bend/Shift):</td><td style='{td_val_style}'>{props.get('control_offset_x',0):.0f} / {props.get('control_offset_y',0):.0f}</td></tr>"
+                if props.get('description'): rows += f"<tr><td style='{td_key_style}'>Desc:</td><td style='{td_val_style}white-space:normal;{small_font_size_css}'>{fmt(props.get('description'),max_lines=3, max_line_chars=50)}</td></tr>"
+
+            elif isinstance(item, GraphicsCommentItem):
+                rows += f"<tr><td style='{td_key_style}'>Text:</td><td style='{td_val_style}white-space:pre-wrap; font-style:italic; color:{COLOR_TEXT_SECONDARY};'>{fmt(props.get('text', ''), max_lines=5, max_line_chars=50)}</td></tr>"
+                rows += f"<tr><td style='{td_key_style}'>Width:</td><td style='{td_val_style}'>{props.get('width', 'N/A')} px</td></tr>"
+            else:
+                rows = f"<tr><td colspan='2' style='{td_val_style}text-align:center;'>Unknown Item Type</td></tr>"
+                item_type_name = "Unknown"
+
+            html_content = f"{item_header_html}{rows}</table></div>"
         elif len(selected_items) > 1:
-            self.properties_placeholder_label.setText(f"<i><b>{len(selected_items)} items selected.</b><br><span style='font-size:{APP_FONT_SIZE_SMALL}; color:{COLOR_TEXT_SECONDARY};'>Select a single item to edit properties.</span></i>")
-            self.properties_editor_container.setVisible(False)
-            self.properties_placeholder_label.setVisible(True)
-            self.properties_edit_dialog_button.setEnabled(False)
-        else: # No items selected
-            self.properties_placeholder_label.setText(f"<i>No item selected.</i><br><span style='font-size:{APP_FONT_SIZE_SMALL}; color:{COLOR_TEXT_SECONDARY};'>Click an item or use tools to add elements.</span>")
-            self.properties_editor_container.setVisible(False)
-            self.properties_placeholder_label.setVisible(True)
-            self.properties_edit_dialog_button.setEnabled(False)
+            html_content = f"<div style='{font_family_css} {std_font_size_css} padding:10px;text-align:center;'><i><b>{len(selected_items)} items selected.</b><br><span style='{small_font_size_css} color:{COLOR_TEXT_SECONDARY};'>Select a single item to view or edit its properties.</span></i></div>"
+            item_type_tooltip = f"{len(selected_items)} items"
+        else:
+            html_content = f"<div style='{font_family_css} {std_font_size_css} padding:10px;text-align:center;'><i>No item selected.</i><br><span style='{small_font_size_css} color:{COLOR_TEXT_SECONDARY};'>Click an item in the diagram or use the tools to add new elements.</span></div>"
 
-        self.properties_apply_button.setEnabled(False) 
-        self.properties_revert_button.setEnabled(False)
-
-
-    def _on_dock_property_changed(self):
-        """
-        Called when a property editor in the dock changes.
-        Enables Apply and Revert buttons.
-        """
-        self.properties_apply_button.setEnabled(True)
-        self.properties_revert_button.setEnabled(True)
-        # Could add logic here to mark the item/scene as dirty immediately,
-        # or wait until "Apply" is clicked.
-
-    def _on_edit_selected_item_properties_from_dock_button(self):
-        if self._current_edited_item_in_dock:
-            self.scene.edit_item_properties(self._current_edited_item_in_dock)
-            # After dialog closes (OK or Cancel), refresh the dock to reflect any changes or non-changes
-            self._update_properties_dock()
-            self.properties_apply_button.setEnabled(False)
-            self.properties_revert_button.setEnabled(False)
+        self.properties_editor_label.setText(html_content)
+        self.properties_edit_button.setEnabled(edit_enabled)
+        self.properties_edit_button.setToolTip(f"Edit properties of selected {item_type_tooltip}" if edit_enabled else "Select a single item to enable editing")
 
 
     def _show_context_menu_for_item_from_scene(self, item, global_pos):
@@ -1123,11 +1074,10 @@ class MainWindow(QMainWindow):
         # Note: bp_action is handled by its triggered.connect, no need for `elif action == bp_action`
 
 
-    # This method was part of the simplified properties dock and is no longer needed
-    # def _on_edit_selected_item_properties_from_dock(self):
-    #     selected = self.scene.selectedItems()
-    #     if len(selected) == 1:
-    #         self.scene.edit_item_properties(selected[0])
+    def _on_edit_selected_item_properties_from_dock(self):
+        selected = self.scene.selectedItems()
+        if len(selected) == 1:
+            self.scene.edit_item_properties(selected[0])
 
     def _update_window_title(self):
         file_name = os.path.basename(self.current_file_path) if self.current_file_path else "Untitled"
@@ -1925,9 +1875,9 @@ class MainWindow(QMainWindow):
 
     def _update_py_simulation_actions_enabled_state(self):
         is_matlab_op_running = False
-        if hasattr(self, 'progress_bar') and self.progress_bar: 
+        if hasattr(self, 'progress_bar') and self.progress_bar:
             is_matlab_op_running = self.progress_bar.isVisible()
-            
+
         sim_can_start = not self.py_sim_active and not is_matlab_op_running
         sim_can_be_controlled = self.py_sim_active and not is_matlab_op_running
 
@@ -2476,4 +2426,3 @@ if __name__ == '__main__':
     main_win = MainWindow()
     main_win.show()
     sys.exit(app.exec_())
-
