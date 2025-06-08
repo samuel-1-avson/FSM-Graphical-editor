@@ -1,0 +1,109 @@
+{
+    "states": [
+        {
+            "name": "Off",
+            "x": 150,
+            "y": 100,
+            "width": 120,
+            "height": 60,
+            "is_initial": true,
+            "is_final": false,
+            "color": "#BDBDBD",
+            "action_language": "Python (Generic Simulation)",
+            "entry_action": "is_on = False\nprint('Device is OFF')",
+            "during_action": "",
+            "exit_action": "",
+            "description": "The device is currently off.",
+            "is_superstate": false,
+            "sub_fsm_data": {
+                "states": [],
+                "transitions": [],
+                "comments": []
+            },
+            "shape_type": "rectangle",
+            "font_family": "Segoe UI",
+            "font_size": 10,
+            "font_bold": true,
+            "font_italic": false,
+            "border_style_str": "Solid",
+            "border_width": 1.8,
+            "icon_path": null
+        },
+        {
+            "name": "On",
+            "x": 400,
+            "y": 100,
+            "width": 120,
+            "height": 60,
+            "is_initial": false,
+            "is_final": false,
+            "color": "#AED581",
+            "action_language": "Python (Generic Simulation)",
+            "entry_action": "is_on = True\nprint('Device is ON')",
+            "during_action": "",
+            "exit_action": "",
+            "description": "The device is currently on.",
+            "is_superstate": false,
+            "sub_fsm_data": {
+                "states": [],
+                "transitions": [],
+                "comments": []
+            },
+            "shape_type": "rectangle",
+            "font_family": "Segoe UI",
+            "font_size": 10,
+            "font_bold": true,
+            "font_italic": false,
+            "border_style_str": "Solid",
+            "border_width": 1.8,
+            "icon_path": null
+        }
+    ],
+    "transitions": [
+        {
+            "source": "Off",
+            "target": "On",
+            "event": "toggle",
+            "condition": "",
+            "action_language": "Python (Generic Simulation)",
+            "action": "print('Toggling ON')",
+            "color": "#00796B",
+            "description": "",
+            "control_offset_x": 0,
+            "control_offset_y": -40,
+            "line_style_str": "Solid",
+            "line_width": 2.2,
+            "arrowhead_style": "filled",
+            "label_font_family": "Segoe UI",
+            "label_font_size": 8
+        },
+        {
+            "source": "On",
+            "target": "Off",
+            "event": "toggle",
+            "condition": "",
+            "action_language": "Python (Generic Simulation)",
+            "action": "print('Toggling OFF')",
+            "color": "#00796B",
+            "description": "",
+            "control_offset_x": 0,
+            "control_offset_y": 40,
+            "line_style_str": "Solid",
+            "line_width": 2.2,
+            "arrowhead_style": "filled",
+            "label_font_family": "Segoe UI",
+            "label_font_size": 8
+        }
+    ],
+    "comments": [
+        {
+            "text": "A simple toggle switch FSM.",
+            "x": 275,
+            "y": 200,
+            "width": 150,
+            "font_family": "Segoe UI",
+            "font_size": 9,
+            "font_italic": true
+        }
+    ]
+}
